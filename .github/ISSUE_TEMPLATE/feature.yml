@@ -1,0 +1,42 @@
+name: Feature
+description: A bounded, implementation-ready feature
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: context
+    attributes: { label: Context, description: Why is this change needed? }
+    validations: { required: true }
+  - type: textarea
+    id: components
+    attributes: { label: Affected files or components }
+    validations: { required: true }
+  - type: textarea
+    id: requirements
+    attributes:
+      {
+        label: Requirements,
+        description: State deterministic behavior and boundaries.,
+      }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes:
+      { label: Acceptance criteria, description: Provide checkable outcomes. }
+    validations: { required: true }
+  - type: textarea
+    id: tests
+    attributes:
+      {
+        label: Tests,
+        description: List required automated and manual validation.,
+      }
+    validations: { required: true }
+  - type: textarea
+    id: exclusions
+    attributes:
+      {
+        label: Do-not-change scope,
+        description: Explicitly identify adjacent behavior that must remain unchanged.,
+      }
+    validations: { required: true }

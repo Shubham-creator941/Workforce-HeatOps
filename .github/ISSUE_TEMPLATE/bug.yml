@@ -1,0 +1,32 @@
+name: Bug
+description: A reproducible defect
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: observed
+    attributes: { label: Observed behavior }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: Expected behavior }
+    validations: { required: true }
+  - type: textarea
+    id: reproduce
+    attributes: { label: Reproduction steps }
+    validations: { required: true }
+  - type: textarea
+    id: impact
+    attributes: { label: Safety or operational impact }
+    validations: { required: true }
+  - type: textarea
+    id: evidence
+    attributes:
+      {
+        label: Logs and environment,
+        description: Remove secrets and personal data.,
+      }
+  - type: textarea
+    id: scope
+    attributes: { label: Do-not-change scope }
+    validations: { required: true }
