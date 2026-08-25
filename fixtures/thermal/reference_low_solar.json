@@ -1,0 +1,28 @@
+{
+  "reference": {
+    "model": "Liljegren WBGT v1.1",
+    "source": "mdljts/wbgt commit cd672a886880b67f3f27bdbf75038d8f7ff0bac2, src/wbgt.c",
+    "generatedBy": "standalone C oracle",
+    "notes": "Low-solar daytime case."
+  },
+  "input": {
+    "snapshotId": "low_solar",
+    "zoneId": "zone_roof",
+    "timestamp": "2026-08-27T17:00:00Z",
+    "latitude": 33.4486,
+    "longitude": -112.0738,
+    "airTemperatureC": 34.0,
+    "relativeHumidityPercent": 35.0,
+    "solarRadiationWm2": 220.0,
+    "windSpeedMs": 2.5,
+    "windMeasurementHeightM": 2.0,
+    "surfacePressureHpa": 964.5,
+    "solarAveragingPeriodMinutes": 60
+  },
+  "expected": {
+    "globeTemperatureC": 37.9272921367999,
+    "naturalWetBulbTemperatureC": 22.5779495651074,
+    "psychrometricWetBulbTemperatureC": 21.5275114561928,
+    "estimatedWbgtC": 26.7900231229352
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "reference": {
+    "model": "Liljegren WBGT v1.1",
+    "source": "mdljts/wbgt commit cd672a886880b67f3f27bdbf75038d8f7ff0bac2, src/wbgt.c",
+    "generatedBy": "standalone C oracle",
+    "notes": "Humid daytime case at 2 m wind height."
+  },
+  "input": {
+    "snapshotId": "humid_daytime",
+    "zoneId": "zone_ground",
+    "timestamp": "2026-08-27T20:00:00Z",
+    "latitude": 29.7604,
+    "longitude": -95.3698,
+    "airTemperatureC": 35.0,
+    "relativeHumidityPercent": 70.0,
+    "solarRadiationWm2": 780.0,
+    "windSpeedMs": 2.0,
+    "windMeasurementHeightM": 2.0,
+    "surfacePressureHpa": 1010.0,
+    "solarAveragingPeriodMinutes": 60
+  },
+  "expected": {
+    "globeTemperatureC": 49.4650033697861,
+    "naturalWetBulbTemperatureC": 31.6110726031759,
+    "psychrometricWetBulbTemperatureC": 29.9549187774055,
+    "estimatedWbgtC": 35.5207514961804
+  }
+}

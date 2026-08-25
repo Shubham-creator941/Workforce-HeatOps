@@ -8,7 +8,7 @@ Outdoor construction supervisors must preserve productive work while thermal con
 
 ## Product vision
 
-Workforce HeatOps will transform validated environmental inputs into Estimated Outdoor WBGT, deterministic occupational constraints, and a proposed heat-aware schedule for supervisor review. These capabilities are **planned**; P0-01 supplies only the engineering foundation.
+Workforce HeatOps transforms normalized meteorological inputs into deterministic Estimated Outdoor WBGT. Occupational constraints and heat-aware scheduling remain **planned**.
 
 ## Architecture
 
@@ -66,7 +66,30 @@ From the repository root after exporting variables from `.env` with the commands
 
 ## Running the decision engine
 
-From `services/decision-engine`: `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000`. It exposes `GET /health` and `GET /version`; the version endpoint explicitly reports scientific and optimizer capabilities as `not-implemented`.
+From `services/decision-engine`: `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000`. It exposes `GET /health`, `GET /version`, and the internal batch endpoint below. `/version` reports Liljegren thermal estimation as implemented while safety and optimization remain `not-implemented`.
+
+### Estimate an offline thermal batch
+
+```bash
+curl -X POST http://127.0.0.1:8000/internal/v1/thermal/batch \
+  -H 'content-type: application/json' \
+  -d '{
+    "contractVersion":"1.0",
+    "planningRunId":"run_example",
+    "model":"LILJEGREN",
+    "items":[{
+      "snapshotId":"env_001","zoneId":"zone_roof",
+      "timestamp":"2026-08-27T20:00:00Z",
+      "latitude":33.4486,"longitude":-112.0738,
+      "airTemperatureC":39.2,"relativeHumidityPercent":31.0,
+      "solarRadiationWm2":845.0,
+      "windSpeedMs":3.2,"windMeasurementHeightM":2.0,
+      "surfacePressureHpa":964.5,"solarAveragingPeriodMinutes":60
+    }]
+  }'
+```
+
+The response includes `estimatedWbgtC`, globe, natural wet-bulb and psychrometric wet-bulb components, reference-model diagnostics, warnings, and item-level status. Non-2 m wind inputs are explicitly unsupported until the environmental contract supplies the additional authoritative stability inputs required by WBGT 1.1.
 
 ## Running tests
 
@@ -96,9 +119,10 @@ Open a bounded issue, branch using the convention in `CONTRIBUTING.md`, implemen
 
 ## Roadmap
 
-- P0-01: engineering foundation — current
-- P0-02: deterministic Python thermal-engine contract and validated Liljegren pathway — planned
-- Versioned occupational rules, CP-SAT optimization, providers, planning orchestration, UI, and AI explanation — planned
+- P0-01: engineering foundation — implemented
+- P0-02: deterministic Python thermal-engine contract and validated Liljegren pathway — implemented
+- P0-03: deterministic occupational safety rules — planned
+- CP-SAT optimization, providers, planning orchestration, UI, and AI explanation — planned
 
 ## Team
 

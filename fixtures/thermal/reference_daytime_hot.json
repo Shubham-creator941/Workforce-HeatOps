@@ -1,0 +1,28 @@
+{
+  "reference": {
+    "model": "Liljegren WBGT v1.1",
+    "source": "mdljts/wbgt commit cd672a886880b67f3f27bdbf75038d8f7ff0bac2, src/wbgt.c",
+    "generatedBy": "clang -std=c99 -O2 oracle.c src/wbgt.c -lm; standalone calc_wbgt invocation",
+    "notes": "Independent command-line build of the preserved double-precision Argonne derivative."
+  },
+  "input": {
+    "snapshotId": "hot_daytime",
+    "zoneId": "zone_roof",
+    "timestamp": "2026-08-27T20:00:00Z",
+    "latitude": 33.4486,
+    "longitude": -112.0738,
+    "airTemperatureC": 39.2,
+    "relativeHumidityPercent": 31.0,
+    "solarRadiationWm2": 845.0,
+    "windSpeedMs": 3.2,
+    "windMeasurementHeightM": 2.0,
+    "surfacePressureHpa": 964.5,
+    "solarAveragingPeriodMinutes": 60
+  },
+  "expected": {
+    "globeTemperatureC": 51.4744371771458,
+    "naturalWetBulbTemperatureC": 25.9442978235977,
+    "psychrometricWetBulbTemperatureC": 24.2468805342097,
+    "estimatedWbgtC": 32.3758959119476
+  }
+}
