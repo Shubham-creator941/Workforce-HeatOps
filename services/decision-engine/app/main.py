@@ -6,7 +6,9 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.config import settings
+from app.routes.safety import router as safety_router
 from app.routes.thermal import router as thermal_router
+from app.rules.niosh_2016_mvp_v1 import RULESET_VERSION
 from app.thermal.liljegren import IMPLEMENTATION_VERSION, SCIENTIFIC_REFERENCE
 
 
@@ -22,7 +24,7 @@ class VersionResponse(BaseModel):
 
     serviceVersion: str  # noqa: N815 - public contract uses camelCase
     thermalModel: "ThermalModelVersion"  # noqa: N815
-    ruleset: Literal["not-implemented"]
+    ruleset: "RulesetVersion"
     optimizer: Literal["not-implemented"]
 
 
@@ -34,8 +36,14 @@ class ThermalModelVersion(BaseModel):
     reference: str
 
 
+class RulesetVersion(BaseModel):
+    name: Literal["NIOSH_2016_MVP_V1"]
+    status: Literal["implemented"]
+
+
 app = FastAPI(title="Workforce HeatOps Decision Engine", version=settings.service_version)
 app.include_router(thermal_router)
+app.include_router(safety_router)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -54,6 +62,6 @@ async def version() -> VersionResponse:
             implementationVersion=IMPLEMENTATION_VERSION,
             reference=SCIENTIFIC_REFERENCE,
         ),
-        ruleset="not-implemented",
+        ruleset=RulesetVersion(name=RULESET_VERSION, status="implemented"),
         optimizer="not-implemented",
     )

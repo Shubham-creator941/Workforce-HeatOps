@@ -1,0 +1,24 @@
+{
+  "source": {
+    "rulesetVersion": "NIOSH_2016_MVP_V1",
+    "sources": ["DHHS (NIOSH) 2016-106", "OSHA Heat Hazard Recognition"]
+  },
+  "input": {
+    "evaluationRef": "moderate_unacclimatized",
+    "thermalEstimateId": "fixture",
+    "estimatedWbgtC": 24,
+    "workloadCategory": "MODERATE",
+    "ppeCategory": "NORMAL_WORK_CLOTHING",
+    "acclimatization": {
+      "state": "NEW_WORKER_RAMP",
+      "day": 1
+    },
+    "recoveryEnvironment": {
+      "mode": "SAME_AS_WORK"
+    }
+  },
+  "expected": {
+    "decision": "CONTINUOUS_WORK_ALLOWED",
+    "ruleIds": ["NIOSH_HOURLY_TWA"]
+  }
+}

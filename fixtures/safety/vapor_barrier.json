@@ -1,0 +1,25 @@
+{
+  "source": {
+    "rulesetVersion": "NIOSH_2016_MVP_V1",
+    "sources": ["DHHS (NIOSH) 2016-106", "OSHA Heat Hazard Recognition"]
+  },
+  "input": {
+    "evaluationRef": "vapor_barrier",
+    "thermalEstimateId": "fixture",
+    "estimatedWbgtC": 24,
+    "workloadCategory": "LIGHT",
+    "ppeCategory": "VAPOR_BARRIER_LIMITED_USE",
+    "acclimatization": {
+      "state": "ACCLIMATIZED"
+    },
+    "recoveryEnvironment": {
+      "mode": "SAME_AS_WORK"
+    }
+  },
+  "expected": {
+    "decision": "RESCHEDULE_REQUIRED",
+    "clothingAdjustmentC": 11.0,
+    "effectiveWorkWbgtC": 35.0,
+    "ruleIds": ["NIOSH_HOURLY_TWA"]
+  }
+}

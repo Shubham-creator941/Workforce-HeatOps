@@ -1,0 +1,23 @@
+{
+  "source": {
+    "rulesetVersion": "NIOSH_2016_MVP_V1",
+    "sources": ["DHHS (NIOSH) 2016-106", "OSHA Heat Hazard Recognition"]
+  },
+  "input": {
+    "evaluationRef": "unknown_acclimatization",
+    "thermalEstimateId": "fixture",
+    "estimatedWbgtC": 24,
+    "workloadCategory": "LIGHT",
+    "ppeCategory": "NORMAL_WORK_CLOTHING",
+    "acclimatization": {
+      "state": "UNKNOWN"
+    },
+    "recoveryEnvironment": {
+      "mode": "SAME_AS_WORK"
+    }
+  },
+  "expected": {
+    "decision": "MANUAL_REVIEW_REQUIRED",
+    "ruleIds": ["NIOSH_HOURLY_TWA"]
+  }
+}

@@ -8,7 +8,7 @@ Outdoor construction supervisors must preserve productive work while thermal con
 
 ## Product vision
 
-Workforce HeatOps transforms normalized meteorological inputs into deterministic Estimated Outdoor WBGT. Occupational constraints and heat-aware scheduling remain **planned**.
+Workforce HeatOps transforms normalized meteorological inputs into deterministic Estimated Outdoor WBGT and versioned occupational heat constraints. Heat-aware scheduling remains **planned**.
 
 ## Architecture
 
@@ -66,7 +66,7 @@ From the repository root after exporting variables from `.env` with the commands
 
 ## Running the decision engine
 
-From `services/decision-engine`: `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000`. It exposes `GET /health`, `GET /version`, and the internal batch endpoint below. `/version` reports Liljegren thermal estimation as implemented while safety and optimization remain `not-implemented`.
+From `services/decision-engine`: `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000`. It exposes `GET /health`, `GET /version`, and the internal batch endpoints below. `/version` reports Liljegren thermal estimation and `NIOSH_2016_MVP_V1` safety as implemented while optimization remains `not-implemented`.
 
 ### Estimate an offline thermal batch
 
@@ -90,6 +90,10 @@ curl -X POST http://127.0.0.1:8000/internal/v1/thermal/batch \
 ```
 
 The response includes `estimatedWbgtC`, globe, natural wet-bulb and psychrometric wet-bulb components, reference-model diagnostics, warnings, and item-level status. Non-2 m wind inputs are explicitly unsupported until the environmental contract supplies the additional authoritative stability inputs required by WBGT 1.1.
+
+### Evaluate an occupational safety batch
+
+`POST /internal/v1/safety/batch` accepts a valid Estimated Outdoor WBGT plus supervisor-confirmed workload, PPE, acclimatization, and recovery context. It returns ordered hourly candidates and the most productive passing constraint under `NIOSH_2016_MVP_V1`. See [the safety-engine scientific boundary](docs/science/safety-engine.md).
 
 ## Running tests
 
@@ -121,7 +125,7 @@ Open a bounded issue, branch using the convention in `CONTRIBUTING.md`, implemen
 
 - P0-01: engineering foundation — implemented
 - P0-02: deterministic Python thermal-engine contract and validated Liljegren pathway — implemented
-- P0-03: deterministic occupational safety rules — planned
+- P0-03: deterministic occupational safety rules — implemented
 - CP-SAT optimization, providers, planning orchestration, UI, and AI explanation — planned
 
 ## Team

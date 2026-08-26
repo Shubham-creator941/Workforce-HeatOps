@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const WorkloadCategorySchema = z.enum([
+  "REST",
   "LIGHT",
   "MODERATE",
   "HEAVY",
@@ -8,6 +9,26 @@ export const WorkloadCategorySchema = z.enum([
   "UNCLASSIFIED",
 ]);
 export type WorkloadCategory = z.infer<typeof WorkloadCategorySchema>;
+
+export const PPECategorySchema = z.enum([
+  "NORMAL_WORK_CLOTHING",
+  "CLOTH_COVERALLS",
+  "SMS_COVERALLS",
+  "POLYOLEFIN_COVERALLS",
+  "DOUBLE_LAYER_CLOTH",
+  "VAPOR_BARRIER_LIMITED_USE",
+  "UNSUPPORTED",
+  "UNKNOWN",
+]);
+export type PPECategory = z.infer<typeof PPECategorySchema>;
+
+export const AcclimatizationStateSchema = z.enum([
+  "ACCLIMATIZED",
+  "NEW_WORKER_RAMP",
+  "RETURNING_WORKER_RAMP",
+  "UNKNOWN",
+]);
+export type AcclimatizationState = z.infer<typeof AcclimatizationStateSchema>;
 
 export const SafetyDecisionSchema = z.enum([
   "CONTINUOUS_WORK_ALLOWED",
