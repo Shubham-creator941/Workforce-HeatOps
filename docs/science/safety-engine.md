@@ -14,17 +14,19 @@ Screening metabolic rates are rest 115 W, light 180 W, moderate 300 W, heavy 415
 
 Clothing Adjustment Factors are 0 °C for normal work clothing and cloth coveralls, 0.5 °C for SMS coveralls, 1 °C for polyolefin coveralls, 3 °C for double-layer cloth, and 11 °C for limited-use vapor-barrier clothing. Unknown or unsupported ensembles require manual review and never default to zero. Effective WBGT is Estimated Outdoor WBGT plus the applicable factor.
 
-## Limits and hourly TWA
+## Validated continuous-work limits
 
 The unacclimatized Recommended Alert Limit is `59.9 - 14.1 × log10(M)` and the acclimatized Recommended Exposure Limit is `56.7 - 11.5 × log10(M)`, in °C-WBGT for metabolic rate `M` in watts. Full precision is used.
 
-Each candidate hour evaluates metabolic TWA `(Mwork × W + 115 × R) / 60` and Effective WBGT TWA `(WBGTwork × W + WBGTrecovery × R) / 60`. Acclimatized inputs use REL; new- and returning-worker ramp inputs use RAL. Equality passes. Margin is limit minus Effective WBGT TWA.
+P0-03 automatically evaluates only the continuous-work RAL/REL limit using the confirmed workload metabolic rate. Acclimatized inputs use REL; new- and returning-worker ramp inputs use RAL. Equality passes. Margin is the applicable continuous-work limit minus Effective WBGT; it is not a risk score.
 
-## Work/rest and recovery policies
+## Work/rest scientific boundary
 
-The ordered candidate set `60/0`, `45/15`, `30/30`, `15/45`, and selection of the most productive passing candidate are Workforce HeatOps MVP engineering policies, not claims about a mandated NIOSH API. `SAME_AS_WORK` is an explicit conservative recovery assumption. `EXPLICIT` requires a supplied recovery Estimated Outdoor WBGT. The same clothing ensemble is assumed during work and recovery. Rest placement within the hour belongs to the future optimizer.
+NIOSH Publication 2016-106 gives the standard RAL/REL equations and separately presents 60-, 45-, 30-, and 15-minute work-per-hour curves in Figures 8-1 and 8-2. It does not provide explicit equations for all four curves. The standard equations alone must not be represented as reproducing those separate curves.
 
-If no candidate passes, `RESCHEDULE_REQUIRED` means only that no supported automated candidate passed under supplied conditions. It does not rule out other occupational controls.
+P0-03 therefore does not synthesize 45/15, 30/30, or 15/45 prescriptions using metabolic or environmental TWA. When Effective WBGT exceeds the continuous-work limit, it returns `MANUAL_REVIEW_REQUIRED` with `DETAILED_WORK_REST_ASSESSMENT_REQUIRED`. An appropriate work/rest regimen or other occupational control may exist, but it requires a detailed assessment outside this validated MVP boundary.
+
+The recovery-environment object remains in contract version 1.0 for compatibility but does not affect the continuous-work calculation because a 60/0 decision has no recovery interval.
 
 ## Acclimatization
 
@@ -32,4 +34,4 @@ New-worker fractions are 0.20, 0.40, 0.60, 0.80, then 1.00. Returning-worker fra
 
 ## Manual review and limitations
 
-Unclassified workload, unsupported or unknown PPE, and unknown acclimatization produce `MANUAL_REVIEW_REQUIRED`. Missing explicit recovery WBGT produces `INSUFFICIENT_DATA`. No values are clamped or inferred. The engine has no network, database, provider, LLM, thermal calculation, persistence, or optimizer access. AI is excluded because safety constants and comparisons must remain deterministic, reviewable, and reproducible.
+Unclassified workload, unsupported or unknown PPE, unknown acclimatization, and continuous-limit exceedance produce `MANUAL_REVIEW_REQUIRED`. No values are clamped or inferred. The engine has no network, database, provider, LLM, thermal calculation, persistence, or optimizer access. AI is excluded because safety constants and comparisons must remain deterministic, reviewable, and reproducible.

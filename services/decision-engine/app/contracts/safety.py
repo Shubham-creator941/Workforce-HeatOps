@@ -87,17 +87,6 @@ class RuleEvidence(BaseModel):
     publication_id: str | None = Field(default=None, alias="publicationId")
 
 
-class CandidateEvaluation(BaseModel):
-    work_minutes_per_hour: int = Field(alias="workMinutesPerHour")
-    rest_minutes_per_hour: int = Field(alias="restMinutesPerHour")
-    metabolic_twa_watts: float = Field(alias="metabolicTwaWatts")
-    effective_wbgt_twa_c: float = Field(alias="effectiveWbgtTwaC")
-    limit_type: Literal["RAL", "REL"] = Field(alias="limitType")
-    applicable_limit_wbgt_c: float = Field(alias="applicableLimitWbgtC")
-    passes: bool
-    margin_c: float = Field(alias="marginC")
-
-
 class AcclimatizationConstraint(BaseModel):
     max_heat_exposure_fraction: float = Field(alias="maxHeatExposureFraction")
 
@@ -124,13 +113,15 @@ class SafetyResult(BaseModel):
     work_metabolic_rate_watts: float | None = Field(alias="workMetabolicRateWatts")
     rest_metabolic_rate_watts: float = Field(alias="restMetabolicRateWatts")
     limit_type: Literal["RAL", "REL"] | None = Field(alias="limitType")
-    selected_pattern: CandidateEvaluation | None = Field(alias="selectedPattern")
+    applicable_continuous_work_limit_wbgt_c: float | None = Field(
+        alias="applicableContinuousWorkLimitWbgtC"
+    )
+    margin_c: float | None = Field(alias="marginC")
     max_work_minutes_per_hour: int | None = Field(alias="maxWorkMinutesPerHour")
     required_rest_minutes_per_hour: int | None = Field(alias="requiredRestMinutesPerHour")
     acclimatization_constraint: AcclimatizationConstraint | None = Field(
         alias="acclimatizationConstraint"
     )
-    candidate_evaluations: list[CandidateEvaluation] = Field(alias="candidateEvaluations")
     rule_evidence: list[RuleEvidence] = Field(alias="ruleEvidence")
     reason: SafetyReason | None = None
 

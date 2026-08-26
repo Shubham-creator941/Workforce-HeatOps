@@ -33,3 +33,8 @@ def test_golden_fixture_decision(path: Path) -> None:
         )
     if "limitType" in expected:
         assert result.limit_type == expected["limitType"]
+    if "reasonCode" in expected:
+        assert result.reason is not None
+        assert result.reason.code == expected["reasonCode"]
+    if expected.get("ruleIds") and result.rule_evidence:
+        assert {entry.rule_id for entry in result.rule_evidence} >= set(expected["ruleIds"])

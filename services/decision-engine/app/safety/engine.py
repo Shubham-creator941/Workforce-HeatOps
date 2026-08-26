@@ -4,7 +4,6 @@ from typing import Protocol, cast
 
 from app.contracts.safety import (
     AcclimatizationConstraint,
-    CandidateEvaluation,
     RuleEvidence,
     SafetyEvaluationInput,
     SafetyReason,
@@ -13,19 +12,17 @@ from app.contracts.safety import (
 from app.rules.models import RuleSource
 from app.rules.niosh_2016_mvp_v1 import (
     CLOTHING,
-    HOURLY_TWA,
     NEW_WORKER,
     NIOSH,
     REL,
     REST_METABOLIC_WATTS,
     RETURNING_WORKER,
-    WORK_REST_CANDIDATES,
     WORKLOAD,
 )
 from app.safety.acclimatization import limit_type, max_heat_exposure_fraction
 from app.safety.clothing import clothing_adjustment
 from app.safety.exposure_limits import ral_wbgt_c, rel_wbgt_c
-from app.safety.workload import metabolic_rate, metabolic_twa
+from app.safety.workload import metabolic_rate
 
 
 class SafetyEngine(Protocol):
@@ -81,43 +78,11 @@ class Niosh2016SafetyEngine:
                 rate,
                 caf,
             )
-        recovery = input_data.recovery_environment
-        if recovery.mode.value == "EXPLICIT" and recovery.estimated_wbgt_c is None:
-            return self._insufficient(base, rate, caf, selected_limit)
-
         effective_work = input_data.estimated_wbgt_c + caf
-        if recovery.mode.value == "SAME_AS_WORK":
-            effective_rest = effective_work
-        else:
-            effective_rest = cast(float, recovery.estimated_wbgt_c) + caf
-        candidates: list[CandidateEvaluation] = []
-        for work_minutes, rest_minutes in WORK_REST_CANDIDATES:
-            m_twa = metabolic_twa(rate, work_minutes)
-            wbgt_twa = (effective_work * work_minutes + effective_rest * rest_minutes) / 60.0
-            threshold = rel_wbgt_c(m_twa) if selected_limit == "REL" else ral_wbgt_c(m_twa)
-            margin = threshold - wbgt_twa
-            candidates.append(
-                CandidateEvaluation(
-                    workMinutesPerHour=work_minutes,
-                    restMinutesPerHour=rest_minutes,
-                    metabolicTwaWatts=m_twa,
-                    effectiveWbgtTwaC=wbgt_twa,
-                    limitType=selected_limit,
-                    applicableLimitWbgtC=threshold,
-                    passes=margin >= 0.0,
-                    marginC=margin,
-                )
-            )
-        chosen = next((candidate for candidate in candidates if candidate.passes), None)
-        decision = (
-            "RESCHEDULE_REQUIRED"
-            if chosen is None
-            else (
-                "CONTINUOUS_WORK_ALLOWED"
-                if chosen.work_minutes_per_hour == 60
-                else "WORK_REST_REQUIRED"
-            )
-        )
+        threshold = rel_wbgt_c(rate) if selected_limit == "REL" else ral_wbgt_c(rate)
+        margin = threshold - effective_work
+        continuous_allowed = margin >= 0.0
+        decision = "CONTINUOUS_WORK_ALLOWED" if continuous_allowed else "MANUAL_REVIEW_REQUIRED"
         fraction = max_heat_exposure_fraction(state, input_data.acclimatization.day)
         ramp_source = (
             NEW_WORKER
@@ -130,7 +95,6 @@ class Niosh2016SafetyEngine:
             _evidence(REL if selected_limit == "REL" else NIOSH),
             _evidence(WORKLOAD),
             _evidence(CLOTHING),
-            _evidence(HOURLY_TWA),
         ]
         if ramp_source is not None:
             evidence.append(_evidence(ramp_source))
@@ -141,12 +105,22 @@ class Niosh2016SafetyEngine:
             effectiveWorkWbgtC=effective_work,
             workMetabolicRateWatts=rate,
             limitType=selected_limit,
-            selectedPattern=chosen,
-            maxWorkMinutesPerHour=chosen.work_minutes_per_hour if chosen else 0,
-            requiredRestMinutesPerHour=chosen.rest_minutes_per_hour if chosen else None,
+            applicableContinuousWorkLimitWbgtC=threshold,
+            marginC=margin,
+            maxWorkMinutesPerHour=60 if continuous_allowed else None,
+            requiredRestMinutesPerHour=0 if continuous_allowed else None,
             acclimatizationConstraint=AcclimatizationConstraint(maxHeatExposureFraction=fraction),
-            candidateEvaluations=candidates,
             ruleEvidence=evidence,
+            reason=None
+            if continuous_allowed
+            else SafetyReason(
+                code="DETAILED_WORK_REST_ASSESSMENT_REQUIRED",
+                message=(
+                    "The continuous-work NIOSH RAL/REL limit is exceeded. P0-03 does not "
+                    "automatically prescribe a work/rest regimen because the NIOSH 45/30/15 "
+                    "work-rest curves have not yet been encoded and validated."
+                ),
+            ),
         )
 
     def _manual(
@@ -164,33 +138,11 @@ class Niosh2016SafetyEngine:
             effectiveWorkWbgtC=None if caf is None else cast(float, base["estimatedWbgtC"]) + caf,
             workMetabolicRateWatts=rate,
             limitType=None,
-            selectedPattern=None,
+            applicableContinuousWorkLimitWbgtC=None,
+            marginC=None,
             maxWorkMinutesPerHour=None,
             requiredRestMinutesPerHour=None,
             acclimatizationConstraint=None,
-            candidateEvaluations=[],
             ruleEvidence=[],
             reason=SafetyReason(code=code, message=message),
-        )
-
-    def _insufficient(
-        self, base: dict[str, object], rate: float, caf: float, selected_limit: str
-    ) -> SafetyResult:
-        return SafetyResult(
-            **base,
-            decision="INSUFFICIENT_DATA",
-            clothingAdjustmentC=caf,
-            effectiveWorkWbgtC=cast(float, base["estimatedWbgtC"]) + caf,
-            workMetabolicRateWatts=rate,
-            limitType=selected_limit,
-            selectedPattern=None,
-            maxWorkMinutesPerHour=None,
-            requiredRestMinutesPerHour=None,
-            acclimatizationConstraint=None,
-            candidateEvaluations=[],
-            ruleEvidence=[],
-            reason=SafetyReason(
-                code="RECOVERY_WBGT_REQUIRED",
-                message="EXPLICIT recovery mode requires estimatedWbgtC.",
-            ),
         )

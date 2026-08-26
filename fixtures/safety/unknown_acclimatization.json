@@ -17,7 +17,6 @@
     }
   },
   "expected": {
-    "decision": "MANUAL_REVIEW_REQUIRED",
-    "ruleIds": ["NIOSH_HOURLY_TWA"]
+    "decision": "MANUAL_REVIEW_REQUIRED"
   }
 }

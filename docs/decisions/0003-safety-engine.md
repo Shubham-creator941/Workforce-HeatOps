@@ -10,16 +10,16 @@ NIOSH Publication 2016-106 is primary. OSHA Heat Hazard Recognition supplies pub
 
 ## Decision
 
-Use immutable `NIOSH_2016_MVP_V1`. NIOSH RAL/REL base-10 equations are primary; rounded OSHA continuous-work values are cross-checks only. Evaluate one-hour metabolic and environmental TWA. Unsupported PPE, unclassified workload, and unknown acclimatization fail to manual review.
+Use immutable `NIOSH_2016_MVP_V1`. NIOSH RAL/REL base-10 equations are authoritative for the automated continuous-work decision; rounded OSHA continuous-work values are cross-checks only. Unsupported PPE, unclassified workload, and unknown acclimatization fail to manual review.
 
-The multi-day acclimatization exposure fraction remains separate from hourly work/rest and never changes the supervisor-supplied state. Safety produces hard machine-readable constraints; it is not an optimization objective.
+The multi-day acclimatization exposure fraction remains separate from the continuous-work thermal decision and never changes the supervisor-supplied state. Safety produces hard machine-readable constraints; it is not an optimization objective.
 
-Workforce HeatOps MVP policies limit candidates to 60/0, 45/15, 30/30, and 15/45, choose the most productive passing candidate, allow an explicit conservative same-as-work recovery environment, and keep clothing unchanged during recovery. These policies are not attributed to NIOSH as mandated software representations.
+NIOSH Figures 8-1 and 8-2 separately show 60-, 45-, 30-, and 15-minute work-per-hour curves, but the publication does not give explicit equations for all curves. Applying continuous RAL/REL equations to a synthesized TWA metabolic rate is not accepted as an equivalent implementation. P0-03 automates only 60/0. Exceedance requires detailed occupational work/rest review and does not emit a break schedule or `RESCHEDULE_REQUIRED`.
 
 ## Consequences
 
-Results are deterministic, offline, explainable, independently testable, and optimizer-ready. Behavioral rule changes require source verification, review, tests, and a new ruleset version.
+Results are deterministic, offline, explainable, and independently testable. They expose the continuous limit and margin for future consumers without inventing optimizer-ready break capacity. Behavioral rule changes require source verification, review, tests, and a new ruleset version.
 
 ## Limitations and future work
 
-Rates are typical screening values based on an approximately 70 kg worker, not personal measurements. The result is NIOSH/OSHA guidance-aligned decision support, not certification, medical risk, or a guarantee. Future revisions may add validated workload classification, other clothing ensembles, recovery clothing changes, and additional authoritative candidate regimens.
+Rates are typical screening values based on an approximately 70 kg worker, not personal measurements. The result is NIOSH/OSHA guidance-aligned decision support, not certification, medical risk, or a guarantee. Future revisions may encode the separate work/rest curves only after defensible numerical derivation and validation against an authoritative representation.

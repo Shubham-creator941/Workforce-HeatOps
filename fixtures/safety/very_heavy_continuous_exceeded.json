@@ -1,0 +1,27 @@
+{
+  "source": {
+    "rulesetVersion": "NIOSH_2016_MVP_V1",
+    "sources": ["DHHS (NIOSH) 2016-106", "OSHA Heat Hazard Recognition"]
+  },
+  "input": {
+    "evaluationRef": "very_heavy_continuous_exceeded",
+    "thermalEstimateId": "fixture",
+    "estimatedWbgtC": 29.0,
+    "workloadCategory": "VERY_HEAVY",
+    "ppeCategory": "NORMAL_WORK_CLOTHING",
+    "acclimatization": { "state": "ACCLIMATIZED" },
+    "recoveryEnvironment": { "mode": "SAME_AS_WORK" }
+  },
+  "expected": {
+    "decision": "MANUAL_REVIEW_REQUIRED",
+    "reasonCode": "DETAILED_WORK_REST_ASSESSMENT_REQUIRED",
+    "limitType": "REL",
+    "clothingAdjustmentC": 0.0,
+    "effectiveWorkWbgtC": 29.0,
+    "ruleIds": [
+      "NIOSH_2016_REL_EQUATION",
+      "OSHA_NIOSH_WORKLOAD_METABOLIC_RATES",
+      "OSHA_NIOSH_CLOTHING_ADJUSTMENT_FACTORS"
+    ]
+  }
+}

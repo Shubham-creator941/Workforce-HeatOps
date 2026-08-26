@@ -20,7 +20,6 @@
   "expected": {
     "decision": "CONTINUOUS_WORK_ALLOWED",
     "maxHeatExposureFraction": 1.0,
-    "limitType": "RAL",
-    "ruleIds": ["NIOSH_HOURLY_TWA"]
+    "limitType": "RAL"
   }
 }

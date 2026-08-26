@@ -17,9 +17,8 @@
     }
   },
   "expected": {
-    "decision": "RESCHEDULE_REQUIRED",
+    "decision": "MANUAL_REVIEW_REQUIRED",
     "clothingAdjustmentC": 11.0,
-    "effectiveWorkWbgtC": 35.0,
-    "ruleIds": ["NIOSH_HOURLY_TWA"]
+    "effectiveWorkWbgtC": 35.0
   }
 }

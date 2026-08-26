@@ -19,7 +19,6 @@
   },
   "expected": {
     "decision": "CONTINUOUS_WORK_ALLOWED",
-    "maxHeatExposureFraction": 0.2,
-    "ruleIds": ["NIOSH_HOURLY_TWA"]
+    "maxHeatExposureFraction": 0.2
   }
 }

@@ -25,8 +25,6 @@ CLOTHING_ADJUSTMENT_C = MappingProxyType(
         "VAPOR_BARRIER_LIMITED_USE": 11.0,
     }
 )
-WORK_REST_CANDIDATES = ((60, 0), (45, 15), (30, 30), (15, 45))
-
 NIOSH = RuleSource(
     "NIOSH_2016_RAL_EQUATION",
     "Criteria for a Recommended Standard: Occupational Exposure to Heat and Hot Environments",
@@ -41,7 +39,6 @@ WORKLOAD = RuleSource(
 CLOTHING = RuleSource(
     "OSHA_NIOSH_CLOTHING_ADJUSTMENT_FACTORS", "Heat Hazard Recognition", "OSHA", 2026
 )
-HOURLY_TWA = RuleSource("NIOSH_HOURLY_TWA", NIOSH.source_title, "NIOSH", 2016, NIOSH.publication_id)
 NEW_WORKER = RuleSource(
     "NIOSH_ACCLIMATIZATION_NEW_WORKER", "Heat Stress: Acclimatization", "NIOSH", 2026
 )

@@ -17,7 +17,6 @@
     }
   },
   "expected": {
-    "decision": "CONTINUOUS_WORK_ALLOWED",
-    "ruleIds": ["NIOSH_HOURLY_TWA"]
+    "decision": "CONTINUOUS_WORK_ALLOWED"
   }
 }

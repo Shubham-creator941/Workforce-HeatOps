@@ -23,6 +23,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @heatops/api prisma:generate
+        env:
+          DATABASE_URL: mysql://ci_user:ci_password@127.0.0.1:3306/heatops_ci
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test

@@ -93,7 +93,7 @@ The response includes `estimatedWbgtC`, globe, natural wet-bulb and psychrometri
 
 ### Evaluate an occupational safety batch
 
-`POST /internal/v1/safety/batch` accepts a valid Estimated Outdoor WBGT plus supervisor-confirmed workload, PPE, acclimatization, and recovery context. It returns ordered hourly candidates and the most productive passing constraint under `NIOSH_2016_MVP_V1`. See [the safety-engine scientific boundary](docs/science/safety-engine.md).
+`POST /internal/v1/safety/batch` accepts a valid Estimated Outdoor WBGT plus supervisor-confirmed workload, PPE, and acclimatization. P0-03 automatically evaluates continuous-work RAL/REL limits. When the continuous-work limit is exceeded, the MVP requires detailed occupational work/rest review rather than synthesizing an unsupported break schedule. See [the safety-engine scientific boundary](docs/science/safety-engine.md).
 
 ## Running tests
 
