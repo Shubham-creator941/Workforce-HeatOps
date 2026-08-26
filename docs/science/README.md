@@ -1,5 +1,5 @@
 # Science boundary
 
-> Thermal and occupational-safety logic has not yet been implemented in P0-01.
+The deterministic Liljegren thermal engine is implemented in P0-02. See [thermal-engine.md](thermal-engine.md) for provenance, contracts, validation evidence, and limitations.
 
-Future work must use authoritative, versioned sources and deterministic fixtures. Outputs must use the term “Estimated Outdoor WBGT.” No formulas, thresholds, PPE adjustments, or medical predictions are implied by the current scaffold.
+Occupational-safety rules remain unimplemented. Outputs use the term “Estimated Outdoor WBGT.” No thresholds, PPE adjustments, safety decisions, or medical predictions are provided by the thermal engine.

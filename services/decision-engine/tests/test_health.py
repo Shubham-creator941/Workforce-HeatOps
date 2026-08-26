@@ -16,12 +16,16 @@ def test_health() -> None:
     }
 
 
-def test_version_is_honest_about_unimplemented_capabilities() -> None:
+def test_version_reports_thermal_only_as_implemented() -> None:
     response = client.get("/version")
     assert response.status_code == 200
     assert response.json() == {
-        "serviceVersion": "0.1.0",
-        "thermalModel": "not-implemented",
+        "serviceVersion": "0.2.0",
+        "thermalModel": {
+            "name": "liljegren",
+            "implementationVersion": "1.0.0",
+            "reference": "Liljegren et al. 2008",
+        },
         "ruleset": "not-implemented",
         "optimizer": "not-implemented",
     }

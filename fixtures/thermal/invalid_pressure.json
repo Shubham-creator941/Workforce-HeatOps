@@ -1,0 +1,17 @@
+{
+  "input": {
+    "snapshotId": "invalid_pressure",
+    "zoneId": "zone",
+    "timestamp": "2026-08-27T20:00:00Z",
+    "latitude": 33.4486,
+    "longitude": -112.0738,
+    "airTemperatureC": 39.2,
+    "relativeHumidityPercent": 31.0,
+    "solarRadiationWm2": 845.0,
+    "windSpeedMs": 3.2,
+    "windMeasurementHeightM": 2.0,
+    "surfacePressureHpa": 0.0,
+    "solarAveragingPeriodMinutes": 60
+  },
+  "expectedStatus": "INVALID_INPUT"
+}

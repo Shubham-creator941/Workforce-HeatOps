@@ -1,0 +1,16 @@
+def estimate(
+    year: int,
+    month: int,
+    day: int,
+    hour: int,
+    minute: int,
+    averaging_minutes: int,
+    latitude: float,
+    longitude: float,
+    solar_radiation_wm2: float,
+    surface_pressure_hpa: float,
+    air_temperature_c: float,
+    relative_humidity_percent: float,
+    wind_speed_ms: float,
+    wind_measurement_height_m: float,
+) -> tuple[int, float, float, float, float, float, float, float]: ...

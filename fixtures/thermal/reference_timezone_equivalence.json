@@ -1,0 +1,11 @@
+{
+  "reference": {
+    "model": "Liljegren WBGT v1.1",
+    "source": "Workforce HeatOps UTC-normalization invariant",
+    "generatedBy": "same standalone C oracle instant after UTC normalization",
+    "notes": "Both timestamps represent 2026-08-27T20:00:00Z and must map identically."
+  },
+  "timestamps": ["2026-08-27T13:00:00-07:00", "2026-08-27T20:00:00Z"],
+  "baseFixture": "reference_daytime_hot.json",
+  "expectedEstimatedWbgtC": 32.3758959119476
+}

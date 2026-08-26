@@ -1,0 +1,28 @@
+{
+  "reference": {
+    "model": "Liljegren WBGT v1.1",
+    "source": "mdljts/wbgt commit cd672a886880b67f3f27bdbf75038d8f7ff0bac2, src/wbgt.c",
+    "generatedBy": "standalone C oracle",
+    "notes": "Nighttime input uses zero actual downward global horizontal irradiance."
+  },
+  "input": {
+    "snapshotId": "nighttime",
+    "zoneId": "zone_roof",
+    "timestamp": "2026-08-28T05:00:00Z",
+    "latitude": 33.4486,
+    "longitude": -112.0738,
+    "airTemperatureC": 30.0,
+    "relativeHumidityPercent": 40.0,
+    "solarRadiationWm2": 0.0,
+    "windSpeedMs": 1.5,
+    "windMeasurementHeightM": 2.0,
+    "surfacePressureHpa": 964.5,
+    "solarAveragingPeriodMinutes": 60
+  },
+  "expected": {
+    "globeTemperatureC": 28.7397072070603,
+    "naturalWetBulbTemperatureC": 19.8293707908472,
+    "psychrometricWetBulbTemperatureC": 19.6558880270155,
+    "estimatedWbgtC": 22.6285009950051
+  }
+}
