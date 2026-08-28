@@ -1,4 +1,4 @@
-"""FastAPI entrypoint exposing only foundation health metadata."""
+"""Internal deterministic decision APIs and health metadata."""
 
 from typing import Literal
 
@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.config import settings
+from app.routes.optimization import router as optimization_router
 from app.routes.safety import router as safety_router
 from app.routes.thermal import router as thermal_router
 from app.rules.niosh_2016_mvp_v1 import RULESET_VERSION
@@ -25,7 +26,7 @@ class VersionResponse(BaseModel):
     serviceVersion: str  # noqa: N815 - public contract uses camelCase
     thermalModel: "ThermalModelVersion"  # noqa: N815
     ruleset: "RulesetVersion"
-    optimizer: Literal["not-implemented"]
+    optimizer: Literal["CP_SAT_SLOTS_V1"]
 
 
 class ThermalModelVersion(BaseModel):
@@ -44,6 +45,7 @@ class RulesetVersion(BaseModel):
 app = FastAPI(title="Workforce HeatOps Decision Engine", version=settings.service_version)
 app.include_router(thermal_router)
 app.include_router(safety_router)
+app.include_router(optimization_router)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -54,7 +56,7 @@ async def health() -> HealthResponse:
 
 @app.get("/version", response_model=VersionResponse)
 async def version() -> VersionResponse:
-    """Report implemented thermal and explicitly deferred capabilities."""
+    """Report the implemented decision-engine versions."""
     return VersionResponse(
         serviceVersion=settings.service_version,
         thermalModel=ThermalModelVersion(
@@ -63,5 +65,5 @@ async def version() -> VersionResponse:
             reference=SCIENTIFIC_REFERENCE,
         ),
         ruleset=RulesetVersion(name=RULESET_VERSION, status="implemented"),
-        optimizer="not-implemented",
+        optimizer="CP_SAT_SLOTS_V1",
     )

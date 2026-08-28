@@ -8,7 +8,7 @@ Outdoor construction supervisors must preserve productive work while thermal con
 
 ## Product vision
 
-Workforce HeatOps transforms normalized meteorological inputs into deterministic Estimated Outdoor WBGT and versioned occupational heat constraints. Heat-aware scheduling remains **planned**.
+Workforce HeatOps transforms normalized meteorological inputs into deterministic Estimated Outdoor WBGT, versioned occupational heat constraints, and internal slot-based schedules. Public planning orchestration remains **planned**.
 
 ## Architecture
 
@@ -20,7 +20,7 @@ Node.js + Express control plane -- MySQL 8.4
 Python + FastAPI deterministic decision plane
 ```
 
-Node owns public APIs, persistence, external providers, orchestration, and future agent coordination. Python owns future deterministic science, safety, and optimization. The browser calls only Node. See [the architecture record](docs/decisions/0001-system-boundaries.md).
+Node owns public APIs, persistence, external providers, orchestration, and future agent coordination. Python owns deterministic science, safety, and optimization. The browser calls only Node. See [the architecture record](docs/decisions/0001-system-boundaries.md).
 
 ## Repository structure
 
@@ -66,7 +66,7 @@ From the repository root after exporting variables from `.env` with the commands
 
 ## Running the decision engine
 
-From `services/decision-engine`: `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000`. It exposes `GET /health`, `GET /version`, and the internal batch endpoints below. `/version` reports Liljegren thermal estimation and `NIOSH_2016_MVP_V1` safety as implemented while optimization remains `not-implemented`.
+From `services/decision-engine`: `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000`. It exposes `GET /health`, `GET /version`, and the internal batch endpoints below. `/version` reports Liljegren thermal estimation, `NIOSH_2016_MVP_V1` safety, and the `CP_SAT_SLOTS_V1` optimizer.
 
 ### Estimate an offline thermal batch
 
@@ -94,6 +94,10 @@ The response includes `estimatedWbgtC`, globe, natural wet-bulb and psychrometri
 ### Evaluate an occupational safety batch
 
 `POST /internal/v1/safety/batch` accepts a valid Estimated Outdoor WBGT plus supervisor-confirmed workload, PPE, and acclimatization. The current safety engine automatically evaluates continuous-work RAL/REL limits. When that threshold is exceeded, detailed occupational work/rest review is required rather than synthesizing an unsupported break schedule. See [the safety-engine scientific boundary](docs/science/safety-engine.md) and [future validated NIOSH work/rest curves](docs/science/p1-validated-work-rest-curves.md).
+
+### Optimize an internal schedule
+
+`POST /internal/v1/optimization/batch` accepts tasks, crews, zones, ordered time slots, explicit availability, skills, dependencies, upstream exposure budgets, and per-slot safety decisions. Only explicit continuous-work authorization permits assignment; required work that cannot fit returns `INFEASIBLE`. Optional work is maximized before delay and crew-preference costs. This endpoint does not calculate heat limits or synthesize break schedules. See [the contract and model](docs/decisions/0004-slot-schedule-optimizer.md) and [example request](fixtures/optimization/continuous_work_plan.json).
 
 ## Running tests
 
@@ -127,7 +131,8 @@ Open a bounded issue, branch using the convention in `CONTRIBUTING.md`, implemen
 - P0-01: engineering foundation — implemented
 - P0-02: deterministic Python thermal-engine contract and validated Liljegren pathway — implemented
 - P0-03: deterministic occupational safety rules — implemented
-- CP-SAT optimization, providers, planning orchestration, UI, and AI explanation — planned
+- Internal CP-SAT slot optimization — implemented; human review required
+- Providers, public planning orchestration, UI, and AI explanation — planned
 
 ## Team
 

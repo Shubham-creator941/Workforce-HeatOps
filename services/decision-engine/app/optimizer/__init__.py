@@ -1,1 +1,1 @@
-"""Optimizer placeholder; no solver is implemented in P0-01."""
+"""Offline scheduling over explicit upstream safety feasibility."""

@@ -1,0 +1,50 @@
+{
+  "contractVersion": "1.0",
+  "plans": [
+    {
+      "planningRef": "example-plan",
+      "safetyRulesetVersion": "NIOSH_2016_MVP_V1",
+      "timeSlotIds": ["08:00", "08:15"],
+      "slotDurationMinutes": 15,
+      "tasks": [
+        {
+          "id": "wall",
+          "zoneId": "north",
+          "durationSlots": 2,
+          "requiredSkills": ["masonry"],
+          "eligibleCrewIds": ["crew-a"],
+          "availableSlotIds": ["08:00", "08:15"]
+        }
+      ],
+      "crews": [
+        {
+          "id": "crew-a",
+          "skills": ["masonry"],
+          "availableSlotIds": ["08:00", "08:15"],
+          "maxHeatExposureSlots": 2
+        }
+      ],
+      "zones": [
+        { "id": "north", "capacity": 1, "availableSlotIds": ["08:00", "08:15"] }
+      ],
+      "safetyFeasibility": [
+        {
+          "taskId": "wall",
+          "crewId": "crew-a",
+          "zoneId": "north",
+          "slotId": "08:00",
+          "evaluationRef": "confirmed-safety-1",
+          "decision": "CONTINUOUS_WORK_ALLOWED"
+        },
+        {
+          "taskId": "wall",
+          "crewId": "crew-a",
+          "zoneId": "north",
+          "slotId": "08:15",
+          "evaluationRef": "confirmed-safety-2",
+          "decision": "CONTINUOUS_WORK_ALLOWED"
+        }
+      ]
+    }
+  ]
+}

@@ -10,4 +10,4 @@ React web -> Node/Express control plane -> Python/FastAPI decision plane
 
 The browser calls only Node. Node owns public APIs, provider access, normalization orchestration, persistence, caching, supervisor decisions, and future AI-agent coordination. Python receives validated, normalized inputs and will eventually own thermal calculation, occupational rules, constraint compilation, optimization, and schedule validation. Python has no network-provider, database, or LLM access.
 
-P0-02 adds a deterministic, offline Liljegren thermal engine behind Python's internal API. Occupational safety and scheduling behavior remain planned.
+Python implements offline Liljegren thermal estimation, continuous-work occupational safety evaluation, and bounded CP-SAT slot scheduling. The optimizer consumes explicit upstream safety decisions and exposure budgets; it does not call either scientific engine. See [ADR 0004](../decisions/0004-slot-schedule-optimizer.md). Public planning orchestration remains in Node's future scope.
