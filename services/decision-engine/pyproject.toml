@@ -1,6 +1,6 @@
 [project]
 name = "workforce-heatops-decision-engine"
-version = "0.2.0"
+version = "0.3.0"
 description = "Deterministic decision plane for Workforce HeatOps"
 requires-python = ">=3.12,<3.13"
 dependencies = ["fastapi>=0.121,<1", "pydantic-settings>=2.12,<3", "uvicorn>=0.38,<1"]
