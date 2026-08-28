@@ -49,19 +49,48 @@ def test_continuous_work_categories(category: str, watts: float) -> None:
     assert result.applicable_continuous_work_limit_wbgt_c == threshold
 
 
-def test_boundary_below_and_equality_pass_above_requires_review() -> None:
-    threshold = rel_wbgt_c(415.0)
+@pytest.mark.parametrize(
+    "category,watts", [("LIGHT", 180), ("MODERATE", 300), ("HEAVY", 415), ("VERY_HEAVY", 520)]
+)
+@pytest.mark.parametrize("state", ["ACCLIMATIZED", "NEW_WORKER_RAMP", "RETURNING_WORKER_RAMP"])
+def test_boundary_below_and_equality_pass_above_requires_review(
+    category: str, watts: float, state: str
+) -> None:
+    acclimatization: dict[str, object] = {"state": state}
+    if state != "ACCLIMATIZED":
+        acclimatization["day"] = 7
+    threshold = (
+        56.7 - 11.5 * math.log10(watts)
+        if state == "ACCLIMATIZED"
+        else 59.9 - 14.1 * math.log10(watts)
+    )
+    request = item(workloadCategory=category, acclimatization=acclimatization)
     for wbgt in (threshold - 1e-9, threshold):
-        assert engine.evaluate(item(estimatedWbgtC=wbgt)).decision == "CONTINUOUS_WORK_ALLOWED"
-    result = engine.evaluate(item(estimatedWbgtC=threshold + 1e-9))
+        result = engine.evaluate(request.model_copy(update={"estimated_wbgt_c": wbgt}))
+        assert result.decision == "CONTINUOUS_WORK_ALLOWED"
+        assert (result.max_work_minutes_per_hour, result.required_rest_minutes_per_hour) == (60, 0)
+        assert result.work_metabolic_rate_watts == watts
+        assert result.applicable_continuous_work_limit_wbgt_c == threshold
+        assert result.margin_c == threshold - wbgt
+        assert result.limit_type == ("REL" if state == "ACCLIMATIZED" else "RAL")
+    result = engine.evaluate(request.model_copy(update={"estimated_wbgt_c": threshold + 1e-9}))
     assert result.decision == "MANUAL_REVIEW_REQUIRED"
     assert result.reason is not None
     assert result.reason.code == "DETAILED_WORK_REST_ASSESSMENT_REQUIRED"
     assert result.margin_c is not None and result.margin_c < 0
+    assert result.max_work_minutes_per_hour is None
+    assert result.required_rest_minutes_per_hour is None
 
 
-def test_exceedance_never_synthesizes_work_rest_pattern() -> None:
-    result = engine.evaluate(item(estimatedWbgtC=30.0))
+@pytest.mark.parametrize("wbgt", [30.0, 35.0, 45.0, 60.0])
+@pytest.mark.parametrize("recovery_wbgt", [0.0, 20.0, 40.0])
+def test_exceedance_never_synthesizes_work_rest_pattern(wbgt: float, recovery_wbgt: float) -> None:
+    result = engine.evaluate(
+        item(
+            estimatedWbgtC=wbgt,
+            recoveryEnvironment={"mode": "EXPLICIT", "estimatedWbgtC": recovery_wbgt},
+        )
+    )
     assert result.decision == "MANUAL_REVIEW_REQUIRED"
     assert result.max_work_minutes_per_hour is None
     assert result.required_rest_minutes_per_hour is None
@@ -74,6 +103,7 @@ def test_exceedance_never_synthesizes_work_rest_pattern() -> None:
     "ppe,caf",
     [
         ("NORMAL_WORK_CLOTHING", 0.0),
+        ("CLOTH_COVERALLS", 0.0),
         ("SMS_COVERALLS", 0.5),
         ("POLYOLEFIN_COVERALLS", 1.0),
         ("DOUBLE_LAYER_CLOTH", 3.0),
@@ -98,6 +128,11 @@ def test_manual_review(field: str, value: str, code: str) -> None:
     result = engine.evaluate(item(**{field: value}))
     assert result.decision == "MANUAL_REVIEW_REQUIRED"
     assert result.reason is not None and result.reason.code == code
+    assert result.max_work_minutes_per_hour is None
+    assert result.required_rest_minutes_per_hour is None
+    if field == "ppeCategory":
+        assert result.clothing_adjustment_c is None
+        assert result.effective_work_wbgt_c is None
 
 
 def test_unknown_acclimatization_requires_review() -> None:
@@ -105,18 +140,19 @@ def test_unknown_acclimatization_requires_review() -> None:
     assert result.decision == "MANUAL_REVIEW_REQUIRED"
 
 
-@pytest.mark.parametrize("day,expected", [(1, .2), (2, .4), (3, .6), (4, .8), (5, 1), (7, 1)])
+@pytest.mark.parametrize("day,expected", [(1, 0.2), (2, 0.4), (3, 0.6), (4, 0.8), (5, 1), (7, 1)])
 def test_new_worker_ramp(day: int, expected: float) -> None:
     assert max_heat_exposure_fraction("NEW_WORKER_RAMP", day) == expected
 
 
-@pytest.mark.parametrize("day,expected", [(1, .5), (2, .6), (3, .8), (4, 1), (8, 1)])
+@pytest.mark.parametrize("day,expected", [(1, 0.5), (2, 0.6), (3, 0.8), (4, 1), (8, 1)])
 def test_returning_worker_ramp(day: int, expected: float) -> None:
     assert max_heat_exposure_fraction("RETURNING_WORKER_RAMP", day) == expected
 
 
-def test_new_worker_day_seven_still_uses_ral() -> None:
-    result = engine.evaluate(item(acclimatization={"state": "NEW_WORKER_RAMP", "day": 7}))
+@pytest.mark.parametrize("state", ["NEW_WORKER_RAMP", "RETURNING_WORKER_RAMP"])
+def test_day_seven_still_uses_ral(state: str) -> None:
+    result = engine.evaluate(item(acclimatization={"state": state, "day": 7}))
     assert result.limit_type == "RAL"
     assert result.acclimatization_constraint is not None
     assert result.acclimatization_constraint.max_heat_exposure_fraction == 1.0

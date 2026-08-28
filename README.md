@@ -93,7 +93,7 @@ The response includes `estimatedWbgtC`, globe, natural wet-bulb and psychrometri
 
 ### Evaluate an occupational safety batch
 
-`POST /internal/v1/safety/batch` accepts a valid Estimated Outdoor WBGT plus supervisor-confirmed workload, PPE, and acclimatization. P0-03 automatically evaluates continuous-work RAL/REL limits. When the continuous-work limit is exceeded, the MVP requires detailed occupational work/rest review rather than synthesizing an unsupported break schedule. See [the safety-engine scientific boundary](docs/science/safety-engine.md).
+`POST /internal/v1/safety/batch` accepts a valid Estimated Outdoor WBGT plus supervisor-confirmed workload, PPE, and acclimatization. The current safety engine automatically evaluates continuous-work RAL/REL limits. When that threshold is exceeded, detailed occupational work/rest review is required rather than synthesizing an unsupported break schedule. See [the safety-engine scientific boundary](docs/science/safety-engine.md) and [future validated NIOSH work/rest curves](docs/science/p1-validated-work-rest-curves.md).
 
 ## Running tests
 
@@ -102,6 +102,7 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm format:check
 
 cd services/decision-engine
 uv run ruff check .

@@ -18,6 +18,8 @@ NIOSH Figures 8-1 and 8-2 separately show 60-, 45-, 30-, and 15-minute work-per-
 
 ## Consequences
 
+The current safety engine automatically evaluates continuous-work RAL/REL limits. When that threshold is exceeded, detailed occupational work/rest review is required rather than synthesizing an unsupported break schedule. Work/rest minutes are null during manual review, not an inferred break prescription. Even a cooler supplied recovery environment cannot change this decision boundary.
+
 Results are deterministic, offline, explainable, and independently testable. They expose the continuous limit and margin for future consumers without inventing optimizer-ready break capacity. Behavioral rule changes require source verification, review, tests, and a new ruleset version.
 
 ## Limitations and future work

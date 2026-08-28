@@ -22,11 +22,17 @@ P0-03 automatically evaluates only the continuous-work RAL/REL limit using the c
 
 ## Work/rest scientific boundary
 
+The current safety engine automatically evaluates continuous-work RAL/REL limits. When that threshold is exceeded, detailed occupational work/rest review is required rather than synthesizing an unsupported break schedule.
+
+For supported inputs, each result exposes `estimatedWbgtC`, `clothingAdjustmentC`, `effectiveWorkWbgtC`, `workloadCategory`, `workMetabolicRateWatts`, `limitType`, `applicableContinuousWorkLimitWbgtC`, `marginC`, and `ruleEvidence`. The batch envelope supplies `rulesetVersion`. Equality is allowed with 60 work minutes and 0 rest minutes; exceedance returns null work/rest minutes and `reason.code = DETAILED_WORK_REST_ASSESSMENT_REQUIRED`. The reason is nested under `reason`, not a top-level `reasonCode` field.
+
 NIOSH Publication 2016-106 gives the standard RAL/REL equations and separately presents 60-, 45-, 30-, and 15-minute work-per-hour curves in Figures 8-1 and 8-2. It does not provide explicit equations for all four curves. The standard equations alone must not be represented as reproducing those separate curves.
 
 P0-03 therefore does not synthesize 45/15, 30/30, or 15/45 prescriptions using metabolic or environmental TWA. When Effective WBGT exceeds the continuous-work limit, it returns `MANUAL_REVIEW_REQUIRED` with `DETAILED_WORK_REST_ASSESSMENT_REQUIRED`. An appropriate work/rest regimen or other occupational control may exist, but it requires a detailed assessment outside this validated MVP boundary.
 
 The recovery-environment object remains in contract version 1.0 for compatibility but does not affect the continuous-work calculation because a 60/0 decision has no recovery interval.
+
+See [Implement validated NIOSH work/rest curves](p1-validated-work-rest-curves.md) for the independent scientific validation required before automated 45/30/15-minute decisions.
 
 ## Acclimatization
 
