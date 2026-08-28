@@ -3,14 +3,23 @@ import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { createDatabaseHealth } from "./db/prisma.js";
 import { createDecisionEngineHealth } from "./decision-engine/client.js";
+import { PrismaClient } from "@prisma/client";
+import { createPlanningDecisionEngine } from "./decision-engine/planning-client.js";
+import { createPlanningService } from "./planning/service.js";
+import { createPrismaPlanningRunStore } from "./planning/store.js";
 
 const config = loadConfig();
-const database = createDatabaseHealth();
+const prisma = new PrismaClient();
+const database = createDatabaseHealth(prisma);
 const server = createServer(
   createApp(
     config,
     database,
     createDecisionEngineHealth(config.DECISION_ENGINE_BASE_URL),
+    createPlanningService(
+      createPrismaPlanningRunStore(prisma),
+      createPlanningDecisionEngine(config.DECISION_ENGINE_BASE_URL),
+    ),
   ),
 );
 

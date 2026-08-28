@@ -8,7 +8,7 @@ Outdoor construction supervisors must preserve productive work while thermal con
 
 ## Product vision
 
-Workforce HeatOps transforms normalized meteorological inputs into deterministic Estimated Outdoor WBGT, versioned occupational heat constraints, and internal slot-based schedules. Public planning orchestration remains **planned**.
+Workforce HeatOps transforms normalized meteorological inputs into deterministic Estimated Outdoor WBGT, versioned occupational heat constraints, and slot-based schedules through a Node planning orchestration MVP. Provider integrations and production access controls remain **planned**.
 
 ## Architecture
 
@@ -99,9 +99,15 @@ The response includes `estimatedWbgtC`, globe, natural wet-bulb and psychrometri
 
 `POST /internal/v1/optimization/batch` accepts tasks, crews, zones, ordered time slots, explicit availability, skills, dependencies, upstream exposure budgets, and per-slot safety decisions. Only explicit continuous-work authorization permits assignment; required work that cannot fit returns `INFEASIBLE`. Optional work is maximized before delay and crew-preference costs. This endpoint does not calculate heat limits or synthesize break schedules. See [the contract and model](docs/decisions/0004-slot-schedule-optimizer.md) and [example request](fixtures/optimization/continuous_work_plan.json).
 
+### Plan through Node
+
+After applying Prisma migrations, `POST /api/v1/planning-runs` accepts normalized snapshots and confirmed operational inputs, calls all three Python stages, and persists the outcome. `GET /api/v1/planning-runs/:id` retrieves it. No providers or LLMs are invoked. See [ADR 0005](docs/decisions/0005-node-planning-orchestration.md) for the typed request, status semantics, deployment prerequisites, and limitations. These routes require trusted-network use until access controls exist.
+
 ## Running tests
 
 ```bash
+pnpm --filter @heatops/api prisma:generate
+pnpm --filter @heatops/contracts build
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -132,7 +138,8 @@ Open a bounded issue, branch using the convention in `CONTRIBUTING.md`, implemen
 - P0-02: deterministic Python thermal-engine contract and validated Liljegren pathway — implemented
 - P0-03: deterministic occupational safety rules — implemented
 - Internal CP-SAT slot optimization — implemented; human review required
-- Providers, public planning orchestration, UI, and AI explanation — planned
+- Node planning orchestration for normalized inputs — implemented MVP
+- Providers, access controls, production job recovery, UI, and AI explanation — planned
 
 ## Team
 

@@ -9,11 +9,14 @@ import type { DecisionEngineHealth } from "./decision-engine/client.js";
 import { correlationId } from "./middleware/correlation-id.js";
 import { errorHandler } from "./middleware/errors.js";
 import { healthRouter } from "./routes/health.js";
+import { planningRouter } from "./routes/planning.js";
+import type { PlanningService } from "./planning/service.js";
 
 export function createApp(
   config: Config,
   database: DatabaseHealth,
   decisionEngine: DecisionEngineHealth,
+  planning?: PlanningService,
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -23,6 +26,7 @@ export function createApp(
   app.use(correlationId);
   app.use(pinoHttp({ logger: pino({ level: config.LOG_LEVEL }) }));
   app.use("/api/v1/health", healthRouter(database, decisionEngine));
+  if (planning) app.use("/api/v1/planning-runs", planningRouter(planning));
   app.use((_request, response) =>
     response
       .status(404)
