@@ -1,0 +1,59 @@
+{
+  "contractVersion": "1.0",
+  "site": { "id": "site-demo", "name": "Phoenix Demo Site" },
+  "slotDurationMinutes": 60,
+  "timeSlots": [{ "id": "hour-1", "endAt": "2026-08-28T18:00:00Z" }],
+  "tasks": [
+    {
+      "id": "task-wall",
+      "zoneId": "zone-east",
+      "durationSlots": 1,
+      "eligibleCrewIds": ["crew-masons"],
+      "availableSlotIds": ["hour-1"],
+      "requiredSkills": ["masonry"],
+      "workloadCategory": "LIGHT"
+    }
+  ],
+  "crews": [
+    {
+      "id": "crew-masons",
+      "skills": ["masonry"],
+      "availableSlotIds": ["hour-1"],
+      "maxHeatExposureSlots": 1,
+      "exposureBudgetRef": "supervisor-budget-demo",
+      "ppeCategory": "NORMAL_WORK_CLOTHING",
+      "acclimatization": { "state": "ACCLIMATIZED" }
+    }
+  ],
+  "zones": [
+    { "id": "zone-east", "capacity": 1, "availableSlotIds": ["hour-1"] }
+  ],
+  "snapshots": [],
+  "environmentalSource": {
+    "mode": "PROVIDERS",
+    "timeZone": "America/Phoenix",
+    "zones": [
+      {
+        "zoneId": "zone-east",
+        "samplePoint": [-112, 33],
+        "polygon": [
+          [-112.01, 32.99],
+          [-111.99, 32.99],
+          [-111.99, 33.01],
+          [-112.01, 33.01],
+          [-112.01, 32.99]
+        ]
+      }
+    ],
+    "verifiedWind2m": [
+      {
+        "zoneId": "zone-east",
+        "slotId": "hour-1",
+        "windSpeedMs": 1.7,
+        "measurementHeightM": 2,
+        "observedAt": "2026-08-28T18:00:00Z",
+        "sourceRef": "trusted-onsite-anemometer-demo"
+      }
+    ]
+  }
+}

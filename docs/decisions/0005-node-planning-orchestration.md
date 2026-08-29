@@ -10,6 +10,7 @@ This is a synchronous internal-use MVP exposed through the Node API. It requires
 
 - `POST /api/v1/planning-runs`: validate the request, persist a run, execute the pipeline, and return HTTP 201 with `{ data: PlanningRun, meta: { correlationId } }`. A created run can end in a failure or infeasibility state; HTTP 201 is not a safety approval.
 - `GET /api/v1/planning-runs/:id`: return a validated persisted run, or HTTP 404.
+- `GET /api/v1/planning-runs/:id/result`: return a supervisor-oriented projection joining each zone/slot snapshot with provider provenance, thermal output, task/crew safety evidence, and optimizer assignments or infeasibility reason. The projection copies validated evidence and does not recalculate science or optimization.
 - Invalid request shapes/references return HTTP 400 before creating a run. Unavailable storage or failed compare-and-set writes return HTTP 503, never an unpersisted successful result.
 
 The shared `PlanningRequestSchema` is the canonical request shape. Contract version is `1.0`. It contains ordered `timeSlots` (`id`, `endAt`), `slotDurationMinutes`, optimizer task/crew/zone inputs, and normalized `snapshots` (thermal inputs plus `slotId`). Tasks additionally carry `workloadCategory`. Crews additionally carry `ppeCategory`, explicit `acclimatization`, and `exposureBudgetRef` for the supplied `maxHeatExposureSlots` budget. The budget must already be confirmed for the planning horizon; Node does not convert acclimatization fractions into time or determine whether a proposed budget is appropriate.

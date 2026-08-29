@@ -62,6 +62,7 @@ export function createPlanningService(
         thermal: [],
         safety: [],
         environmentalEvidence: [],
+        safetyEvaluationContexts: [],
         optimization: null,
         error: null,
       };
@@ -303,6 +304,17 @@ export function createPlanningService(
                 recoveryEnvironment: { mode: "SAME_AS_WORK" },
               });
             }
+        run = {
+          ...run,
+          safetyEvaluationContexts: keys.map((key) => {
+            const snapshot = snapshotFor(key.zoneId, key.slotId);
+            if (!snapshot) throw new DecisionEngineError("MISSING_STAGE_INPUT");
+            return {
+              ...key,
+              thermalEstimateId: snapshot.snapshotId,
+            };
+          }),
+        };
         for (let offset = 0; offset < evaluations.length; offset += 1000) {
           const batch = evaluations.slice(offset, offset + 1000);
           const safety = SafetyBatchResponseSchema.parse(

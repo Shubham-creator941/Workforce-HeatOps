@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { PlanningRunSchema } from "@heatops/contracts";
 import type { PlanningService } from "../planning/service.js";
+import { toSupervisorPlanningResult } from "../planning/supervisor-result.js";
 
 export function planningRouter(service: PlanningService): Router {
   const router = Router();
@@ -28,6 +29,24 @@ export function planningRouter(service: PlanningService): Router {
     }
     response.json({
       data: PlanningRunSchema.parse(run),
+      meta: { correlationId: request.correlationId },
+    });
+  });
+  router.get("/:id/result", async (request, response) => {
+    const id = z.uuid().parse(request.params.id);
+    const run = await service.get(id);
+    if (!run) {
+      response.status(404).json({
+        error: {
+          code: "PLANNING_RUN_NOT_FOUND",
+          message: "Planning run not found.",
+        },
+        meta: { correlationId: request.correlationId },
+      });
+      return;
+    }
+    response.json({
+      data: toSupervisorPlanningResult(PlanningRunSchema.parse(run)),
       meta: { correlationId: request.correlationId },
     });
   });

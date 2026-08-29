@@ -365,6 +365,10 @@ export const OptimizationBatchResponseSchema = z
 export const PlanningRequestSchema = z
   .object({
     contractVersion: z.literal("1.0"),
+    site: z
+      .object({ id: Id, name: z.string().min(1).max(200) })
+      .strict()
+      .optional(),
     slotDurationMinutes: z.number().int().min(1).max(60),
     timeSlots: z
       .array(
@@ -511,6 +515,20 @@ export const PlanningRunSchema = z
     thermal: z.array(ThermalBatchResponseSchema),
     safety: z.array(SafetyBatchResponseSchema),
     environmentalEvidence: z.array(EnvironmentalEvidenceSchema).default([]),
+    safetyEvaluationContexts: z
+      .array(
+        z
+          .object({
+            evaluationRef: Id,
+            thermalEstimateId: Id,
+            taskId: Id,
+            crewId: Id,
+            zoneId: Id,
+            slotId: Id,
+          })
+          .strict(),
+      )
+      .default([]),
     optimization: OptimizationResultSchema.nullable(),
     error: z.object({ code: Id, message: z.string() }).nullable(),
   })
@@ -534,6 +552,62 @@ export const PlanningRunSchema = z
 export type PlanningRequest = z.infer<typeof PlanningRequestSchema>;
 export type PlanningRun = z.infer<typeof PlanningRunSchema>;
 export type EnvironmentalEvidence = z.infer<typeof EnvironmentalEvidenceSchema>;
+export const SupervisorPlanningResultSchema = z
+  .object({
+    planningRunId: z.uuid(),
+    status: PlanningRunStatusSchema,
+    site: z
+      .object({ id: Id, name: z.string().min(1) })
+      .strict()
+      .nullable(),
+    environment: z.array(
+      z
+        .object({
+          snapshot: ThermalInputSchema.extend({ slotId: Id }),
+          providerEvidence: EnvironmentalEvidenceSchema.nullable(),
+          thermal: ThermalResultSchema.nullable(),
+        })
+        .strict(),
+    ),
+    safety: z.array(
+      z
+        .object({
+          context: z.object({
+            evaluationRef: Id,
+            thermalEstimateId: Id,
+            taskId: Id,
+            crewId: Id,
+            zoneId: Id,
+            slotId: Id,
+          }),
+          result: SafetyResultSchema,
+        })
+        .strict(),
+    ),
+    schedule: z
+      .object({
+        solverStatus: SolverStatusSchema,
+        assignments: z.array(
+          z.object({
+            taskId: Id,
+            crewId: Id,
+            zoneId: Id,
+            slotIds: z.array(Id),
+            slotEndsAt: z.array(z.iso.datetime({ offset: true })),
+            safetyEvaluationRefs: z.array(Id),
+          }),
+        ),
+        unscheduledTaskIds: z.array(Id),
+        reasonCode: z.string().nullable(),
+      })
+      .strict()
+      .nullable(),
+    error: z.object({ code: Id, message: z.string() }).nullable(),
+  })
+  .strict();
+export type SupervisorPlanningResult = z.infer<
+  typeof SupervisorPlanningResultSchema
+>;
 export type ThermalBatchRequest = z.infer<typeof ThermalBatchRequestSchema>;
 export type ThermalBatchResponse = z.infer<typeof ThermalBatchResponseSchema>;
 export type SafetyBatchRequest = z.infer<typeof SafetyBatchRequestSchema>;

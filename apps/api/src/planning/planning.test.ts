@@ -6,6 +6,7 @@ import { PrismaClient } from "@prisma/client";
 import {
   PlanningRequestSchema,
   PlanningRunSchema,
+  SupervisorPlanningResultSchema,
   ThermalBatchRequestSchema,
   SafetyBatchRequestSchema,
   OptimizationBatchRequestSchema,
@@ -604,6 +605,34 @@ describe("planning API", () => {
       .expect(404);
     store.failAt = "ALIGNING_DATA";
     await request(app).post("/api/v1/planning-runs").send(input()).expect(503);
+  });
+  it("exposes infeasibility and manual-review evidence to supervisors", async () => {
+    const { app } = appFor("manual");
+    const created = await request(app)
+      .post("/api/v1/planning-runs")
+      .send(input())
+      .expect(201);
+    const createdBody: unknown = created.body;
+    const run = z.object({ data: PlanningRunSchema }).parse(createdBody).data;
+    const response = await request(app)
+      .get(`/api/v1/planning-runs/${run.id}/result`)
+      .expect(200);
+    const responseBody: unknown = response.body;
+    const result = z
+      .object({ data: SupervisorPlanningResultSchema })
+      .parse(responseBody).data;
+    expect(result.status).toBe("INFEASIBLE");
+    expect(result.schedule).toMatchObject({
+      solverStatus: "INFEASIBLE",
+      reasonCode: "HARD_CONSTRAINTS_INFEASIBLE",
+    });
+    expect(result.safety[0]).toMatchObject({
+      context: { taskId: "t", crewId: "c", zoneId: "z", slotId: "s0" },
+      result: {
+        decision: "MANUAL_REVIEW_REQUIRED",
+        reason: { code: "DETAILED_WORK_REST_ASSESSMENT_REQUIRED" },
+      },
+    });
   });
 });
 
