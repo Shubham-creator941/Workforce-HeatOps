@@ -143,7 +143,7 @@ describe("Supervisor Mission Control", () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
       `/api/v1/planning-runs/${run.id}/result`,
     );
-    expect(await screen.findByText("OPTIMAL")).toBeInTheDocument();
+    expect(await screen.findAllByText("OPTIMAL")).toHaveLength(2);
   });
   it("shows a backend failure without fabricating a result", async () => {
     vi.stubGlobal(
