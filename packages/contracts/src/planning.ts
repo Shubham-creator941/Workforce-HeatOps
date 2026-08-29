@@ -29,6 +29,91 @@ export const ThermalInputSchema = z
     solarAveragingPeriodMinutes: z.number().int(),
   })
   .strict();
+const CoordinateSchema = z.tuple([
+  z.number().finite().min(-180).max(180),
+  z.number().finite().min(-90).max(90),
+]);
+const ProviderEnvironmentalSourceSchema = z
+  .object({
+    mode: z.literal("PROVIDERS"),
+    timeZone: z.string().min(1).max(128),
+    zones: z
+      .array(
+        z
+          .object({
+            zoneId: Id,
+            samplePoint: CoordinateSchema,
+            polygon: z.array(CoordinateSchema).min(4).max(500),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(30),
+    verifiedWind2m: z
+      .array(
+        z
+          .object({
+            zoneId: Id,
+            slotId: Id,
+            windSpeedMs: Finite.min(0),
+            measurementHeightM: z.literal(2),
+            observedAt: z.iso.datetime({ offset: true }),
+            sourceRef: Id,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(720),
+  })
+  .strict();
+export const EnvironmentalSourceSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("NORMALIZED") }).strict(),
+  ProviderEnvironmentalSourceSchema,
+]);
+
+export const EnvironmentalEvidenceSchema = z
+  .object({
+    snapshotId: Id,
+    zoneId: Id,
+    slotId: Id,
+    fortyGuard: z
+      .object({
+        provider: z.literal("FORTYGUARD_TEMPERATURE_API_V1"),
+        activityId: Id,
+        tileId: Id,
+        granularityM: z.literal(60),
+        averageTemperatureC: Finite,
+        minTemperatureC: Finite,
+        maxTemperatureC: Finite,
+        submittedStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        submittedStartTime: z.string().regex(/^\d{2}:\d{2}$/),
+        submittedTimeZone: z.string().min(1),
+        alignedIntervalStart: z.iso.datetime({ offset: true }),
+        alignedIntervalEnd: z.iso.datetime({ offset: true }),
+        responseTimestampSemantics: z.literal("NOT_PROVIDED"),
+      })
+      .strict(),
+    meteorology: z
+      .object({
+        provider: z.literal("OPEN_METEO_FORECAST_API"),
+        requestedTimestamp: z.iso.datetime({ offset: true }),
+        returnedTimestamp: z.string().min(1),
+        relativeHumidityPercent: Finite,
+        surfacePressureHpa: Finite,
+        shortwaveRadiationWm2: Finite,
+        radiationSemantics: z.literal("PRECEDING_HOUR_MEAN"),
+      })
+      .strict(),
+    wind: z
+      .object({
+        sourceRef: Id,
+        observedAt: z.iso.datetime({ offset: true }),
+        windSpeedMs: Finite.min(0),
+        measurementHeightM: z.literal(2),
+      })
+      .strict(),
+  })
+  .strict();
 export const ThermalBatchRequestSchema = z
   .object({
     contractVersion: z.literal("1.0"),
@@ -306,7 +391,13 @@ export const PlanningRequestSchema = z
       .min(1)
       .max(10),
     zones: z.array(OptimizationZoneSchema).min(1).max(30),
-    snapshots: z.array(ThermalInputSchema.extend({ slotId: Id })).max(720),
+    environmentalSource: EnvironmentalSourceSchema.default({
+      mode: "NORMALIZED",
+    }),
+    snapshots: z
+      .array(ThermalInputSchema.extend({ slotId: Id }))
+      .max(720)
+      .default([]),
   })
   .strict()
   .superRefine((value, context) => {
@@ -334,6 +425,45 @@ export const PlanningRequestSchema = z
     const crewIds = new Set(value.crews.map((crew) => crew.id));
     const taskIds = new Set(value.tasks.map((task) => task.id));
     const zoneIds = new Set(value.zones.map((zone) => zone.id));
+    if (value.environmentalSource.mode === "PROVIDERS") {
+      try {
+        new Intl.DateTimeFormat("en-US", {
+          timeZone: value.environmentalSource.timeZone,
+        }).format(new Date());
+      } catch {
+        issue("Provider timezone must be a valid IANA timezone");
+      }
+      if (value.slotDurationMinutes !== 60)
+        issue("Provider mode requires 60-minute slots");
+      if (value.snapshots.length !== 0)
+        issue("Provider mode must not include caller-supplied snapshots");
+      const providerZones = new Set(
+        value.environmentalSource.zones.map((zone) => zone.zoneId),
+      );
+      const windKeys = value.environmentalSource.verifiedWind2m.map((wind) =>
+        JSON.stringify([wind.zoneId, wind.slotId]),
+      );
+      if (!unique([...providerZones])) issue("Provider zones must be unique");
+      if (!unique(windKeys)) issue("Verified wind observations must be unique");
+      for (const zone of value.environmentalSource.zones) {
+        const first = zone.polygon[0];
+        const last = zone.polygon.at(-1);
+        if (!first || !last || first[0] !== last[0] || first[1] !== last[1])
+          issue("Provider polygons must be closed");
+      }
+      for (const task of value.tasks)
+        if (!providerZones.has(task.zoneId)) issue("Missing provider zone");
+      for (const task of value.tasks)
+        for (const slot of value.timeSlots) {
+          const wind = value.environmentalSource.verifiedWind2m.find(
+            (item) => item.zoneId === task.zoneId && item.slotId === slot.id,
+          );
+          if (!wind || Date.parse(wind.observedAt) !== Date.parse(slot.endAt))
+            issue(
+              "Exact verified 2 m wind is required for each task zone/slot",
+            );
+        }
+    }
     for (const entity of [...value.tasks, ...value.crews, ...value.zones])
       if (entity.availableSlotIds.some((id) => !slotIds.has(id)))
         issue("Unknown availability slot");
@@ -374,8 +504,13 @@ export const PlanningRunSchema = z
     status: PlanningRunStatusSchema,
     history: z.array(PlanningRunStatusSchema),
     request: PlanningRequestSchema,
+    normalizedSnapshots: z
+      .array(ThermalInputSchema.extend({ slotId: Id }))
+      .max(720)
+      .default([]),
     thermal: z.array(ThermalBatchResponseSchema),
     safety: z.array(SafetyBatchResponseSchema),
+    environmentalEvidence: z.array(EnvironmentalEvidenceSchema).default([]),
     optimization: OptimizationResultSchema.nullable(),
     error: z.object({ code: Id, message: z.string() }).nullable(),
   })
@@ -398,6 +533,7 @@ export const PlanningRunSchema = z
   }, "Planning status and persisted result must agree");
 export type PlanningRequest = z.infer<typeof PlanningRequestSchema>;
 export type PlanningRun = z.infer<typeof PlanningRunSchema>;
+export type EnvironmentalEvidence = z.infer<typeof EnvironmentalEvidenceSchema>;
 export type ThermalBatchRequest = z.infer<typeof ThermalBatchRequestSchema>;
 export type ThermalBatchResponse = z.infer<typeof ThermalBatchResponseSchema>;
 export type SafetyBatchRequest = z.infer<typeof SafetyBatchRequestSchema>;

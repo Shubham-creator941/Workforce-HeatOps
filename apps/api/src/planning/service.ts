@@ -9,15 +9,27 @@ import {
   type PlanningRunStatus,
   type SafetyBatchRequest,
   type OptimizationBatchRequest,
+  type PlanningRequest,
+  type EnvironmentalEvidence,
 } from "@heatops/contracts";
 import {
   DecisionEngineError,
   type PlanningDecisionEngine,
 } from "../decision-engine/planning-client.js";
 import { PlanningPersistenceError, type PlanningRunStore } from "./store.js";
+import { ProviderError } from "../providers/errors.js";
+import type { FortyGuardClient } from "../providers/fortyguard.js";
+import type { MeteorologyClient } from "../providers/open-meteo.js";
+
+export interface PlanningProviders {
+  fortyGuard: FortyGuardClient;
+  meteorology: MeteorologyClient;
+}
 
 const transitions: Partial<Record<PlanningRunStatus, PlanningRunStatus[]>> = {
-  QUEUED: ["ALIGNING_DATA", "FAILED"],
+  QUEUED: ["FETCHING_FORTYGUARD", "ALIGNING_DATA", "FAILED"],
+  FETCHING_FORTYGUARD: ["FETCHING_METEOROLOGY", "INSUFFICIENT_DATA", "FAILED"],
+  FETCHING_METEOROLOGY: ["ALIGNING_DATA", "INSUFFICIENT_DATA", "FAILED"],
   ALIGNING_DATA: ["CALCULATING_THERMAL", "INSUFFICIENT_DATA", "FAILED"],
   CALCULATING_THERMAL: ["EVALUATING_SAFETY", "INSUFFICIENT_DATA", "FAILED"],
   EVALUATING_SAFETY: ["OPTIMIZING", "INSUFFICIENT_DATA", "FAILED"],
@@ -34,6 +46,7 @@ function requireMatchingIds(expected: string[], actual: string[]): void {
 export function createPlanningService(
   store: PlanningRunStore,
   engine: PlanningDecisionEngine,
+  providers?: PlanningProviders,
 ) {
   return {
     get: (id: string) => store.get(id),
@@ -45,8 +58,10 @@ export function createPlanningService(
         status: "QUEUED",
         history: ["QUEUED"],
         request,
+        normalizedSnapshots: [],
         thermal: [],
         safety: [],
+        environmentalEvidence: [],
         optimization: null,
         error: null,
       };
@@ -67,9 +82,134 @@ export function createPlanningService(
         run = next;
       }
       try {
-        await advance("ALIGNING_DATA");
+        let snapshots: PlanningRequest["snapshots"] = request.snapshots;
+        if (request.environmentalSource.mode === "PROVIDERS") {
+          await advance("FETCHING_FORTYGUARD");
+          if (!providers)
+            throw new ProviderError("FORTYGUARD", "CONFIGURATION");
+          const pairs = request.tasks
+            .flatMap((task) =>
+              request.timeSlots.map((slot) => ({ zoneId: task.zoneId, slot })),
+            )
+            .filter(
+              (pair, index, all) =>
+                all.findIndex(
+                  (item) =>
+                    item.zoneId === pair.zoneId &&
+                    item.slot.id === pair.slot.id,
+                ) === index,
+            );
+          const temperatures: Array<{
+            zoneId: string;
+            slot: PlanningRequest["timeSlots"][number];
+            zone: Extract<
+              PlanningRequest["environmentalSource"],
+              { mode: "PROVIDERS" }
+            >["zones"][number];
+            temperature: Awaited<ReturnType<FortyGuardClient["temperature"]>>;
+          }> = [];
+          for (const pair of pairs) {
+            const zone = request.environmentalSource.zones.find(
+              (item) => item.zoneId === pair.zoneId,
+            );
+            if (!zone) throw new ProviderError("FORTYGUARD", "MISSING_DATA");
+            const end = new Date(pair.slot.endAt);
+            const start = new Date(end.valueOf() - 3_600_000);
+            temperatures.push({
+              ...pair,
+              zone,
+              temperature: await providers.fortyGuard.temperature({
+                polygon: zone.polygon,
+                samplePoint: zone.samplePoint,
+                intervalStartUtc: start.toISOString(),
+                intervalEndUtc: end.toISOString(),
+                timeZone: request.environmentalSource.timeZone,
+              }),
+            });
+          }
+          await advance("FETCHING_METEOROLOGY");
+          const normalized: PlanningRequest["snapshots"] = [];
+          const evidence: EnvironmentalEvidence[] = [];
+          for (const item of temperatures) {
+            const [longitude, latitude] = item.zone.samplePoint;
+            const meteorology = await providers.meteorology.meteorology({
+              latitude,
+              longitude,
+              timestamp: item.slot.endAt,
+            });
+            const expectedEnd = new Date(item.slot.endAt);
+            const expectedStart = new Date(expectedEnd.valueOf() - 3_600_000);
+            if (
+              item.temperature.submittedTimeZone !==
+                request.environmentalSource.timeZone ||
+              Date.parse(item.temperature.alignedIntervalStart) !==
+                expectedStart.valueOf() ||
+              Date.parse(item.temperature.alignedIntervalEnd) !==
+                expectedEnd.valueOf() ||
+              meteorology.returnedTimestamp !==
+                expectedEnd.toISOString().slice(0, 16)
+            )
+              throw new ProviderError("OPEN_METEO", "TEMPORAL_ALIGNMENT");
+            const wind = request.environmentalSource.verifiedWind2m.find(
+              (candidate) =>
+                candidate.zoneId === item.zoneId &&
+                candidate.slotId === item.slot.id,
+            );
+            if (
+              !wind ||
+              Date.parse(wind.observedAt) !== Date.parse(item.slot.endAt)
+            )
+              throw new ProviderError("OPEN_METEO", "MISSING_DATA");
+            const snapshotId = `provider:${item.zoneId}:${item.slot.id}`;
+            normalized.push({
+              snapshotId,
+              zoneId: item.zoneId,
+              slotId: item.slot.id,
+              timestamp: item.slot.endAt,
+              latitude,
+              longitude,
+              airTemperatureC: item.temperature.averageTemperatureC,
+              relativeHumidityPercent: meteorology.relativeHumidityPercent,
+              solarRadiationWm2: meteorology.shortwaveRadiationWm2,
+              windSpeedMs: wind.windSpeedMs,
+              windMeasurementHeightM: 2,
+              surfacePressureHpa: meteorology.surfacePressureHpa,
+              solarAveragingPeriodMinutes: 60,
+            });
+            evidence.push({
+              snapshotId,
+              zoneId: item.zoneId,
+              slotId: item.slot.id,
+              fortyGuard: {
+                provider: "FORTYGUARD_TEMPERATURE_API_V1",
+                ...item.temperature,
+                granularityM: 60,
+                responseTimestampSemantics: "NOT_PROVIDED",
+              },
+              meteorology: {
+                provider: "OPEN_METEO_FORECAST_API",
+                requestedTimestamp: item.slot.endAt,
+                ...meteorology,
+                radiationSemantics: "PRECEDING_HOUR_MEAN",
+              },
+              wind: {
+                sourceRef: wind.sourceRef,
+                observedAt: wind.observedAt,
+                windSpeedMs: wind.windSpeedMs,
+                measurementHeightM: 2,
+              },
+            });
+          }
+          snapshots = normalized;
+          await advance("ALIGNING_DATA", {
+            normalizedSnapshots: snapshots,
+            environmentalEvidence: evidence,
+          });
+        } else {
+          await advance("ALIGNING_DATA", { normalizedSnapshots: snapshots });
+        }
         const snapshotFor = (zone: string, slot: string) =>
-          request.snapshots.find(
+          snapshots.find(
             (snapshot) => snapshot.zoneId === zone && snapshot.slotId === slot,
           );
         if (
@@ -94,7 +234,7 @@ export function createPlanningService(
               contractVersion: "1.0",
               planningRunId: run.id,
               model: "LILJEGREN",
-              items: request.snapshots.map(({ slotId: _slot, ...snapshot }) => {
+              items: snapshots.map(({ slotId: _slot, ...snapshot }) => {
                 void _slot;
                 return snapshot;
               }),
@@ -104,7 +244,7 @@ export function createPlanningService(
         );
         run = { ...run, thermal: [thermal] };
         requireMatchingIds(
-          request.snapshots.map((s) => s.snapshotId),
+          snapshots.map((s) => s.snapshotId),
           thermal.results.map((s) => s.snapshotId),
         );
         if (thermal.results.some((item) => item.status !== "VALID")) {
@@ -323,12 +463,22 @@ export function createPlanningService(
         );
       } catch (error) {
         if (error instanceof PlanningPersistenceError) throw error;
-        await advance("FAILED", {
+        const insufficient =
+          error instanceof ProviderError &&
+          [
+            "INVALID_REQUEST",
+            "INVALID_RESPONSE",
+            "MISSING_DATA",
+            "TEMPORAL_ALIGNMENT",
+          ].includes(error.kind);
+        await advance(insufficient ? "INSUFFICIENT_DATA" : "FAILED", {
           error: {
             code:
-              error instanceof DecisionEngineError
-                ? error.code
-                : "PLANNING_FAILED",
+              error instanceof ProviderError
+                ? error.message
+                : error instanceof DecisionEngineError
+                  ? error.code
+                  : "PLANNING_FAILED",
             message:
               "Planning could not complete; no automatic approval was issued.",
           },

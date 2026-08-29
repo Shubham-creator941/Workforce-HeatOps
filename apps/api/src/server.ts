@@ -7,6 +7,8 @@ import { PrismaClient } from "@prisma/client";
 import { createPlanningDecisionEngine } from "./decision-engine/planning-client.js";
 import { createPlanningService } from "./planning/service.js";
 import { createPrismaPlanningRunStore } from "./planning/store.js";
+import { createFortyGuardClient } from "./providers/fortyguard.js";
+import { createOpenMeteoClient } from "./providers/open-meteo.js";
 
 const config = loadConfig();
 const prisma = new PrismaClient();
@@ -19,6 +21,21 @@ const server = createServer(
     createPlanningService(
       createPrismaPlanningRunStore(prisma),
       createPlanningDecisionEngine(config.DECISION_ENGINE_BASE_URL),
+      {
+        fortyGuard: createFortyGuardClient({
+          ...(config.FORTYGUARD_API_KEY
+            ? { apiKey: config.FORTYGUARD_API_KEY }
+            : {}),
+          baseUrl: config.FORTYGUARD_BASE_URL,
+          timeoutMs: config.PROVIDER_TIMEOUT_MS,
+          pollAttempts: config.FORTYGUARD_POLL_ATTEMPTS,
+          pollIntervalMs: config.FORTYGUARD_POLL_INTERVAL_MS,
+        }),
+        meteorology: createOpenMeteoClient({
+          baseUrl: config.OPEN_METEO_BASE_URL,
+          timeoutMs: config.PROVIDER_TIMEOUT_MS,
+        }),
+      },
     ),
   ),
 );

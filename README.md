@@ -8,7 +8,7 @@ Outdoor construction supervisors must preserve productive work while thermal con
 
 ## Product vision
 
-Workforce HeatOps transforms normalized meteorological inputs into deterministic Estimated Outdoor WBGT, versioned occupational heat constraints, and slot-based schedules through a Node planning orchestration MVP. Provider integrations and production access controls remain **planned**.
+Workforce HeatOps transforms normalized or provider-backed meteorological inputs into deterministic Estimated Outdoor WBGT, versioned occupational heat constraints, and slot-based schedules through a Node planning orchestration MVP. Production access controls remain **planned**.
 
 ## Architecture
 
@@ -101,7 +101,7 @@ The response includes `estimatedWbgtC`, globe, natural wet-bulb and psychrometri
 
 ### Plan through Node
 
-After applying Prisma migrations, `POST /api/v1/planning-runs` accepts normalized snapshots and confirmed operational inputs, calls all three Python stages, and persists the outcome. `GET /api/v1/planning-runs/:id` retrieves it. No providers or LLMs are invoked. See [ADR 0005](docs/decisions/0005-node-planning-orchestration.md) for the typed request, status semantics, deployment prerequisites, and limitations. These routes require trusted-network use until access controls exist.
+After applying Prisma migrations, `POST /api/v1/planning-runs` accepts normalized snapshots or provider-backed environmental requests plus confirmed operational inputs, calls all three Python stages, and persists the outcome. Provider mode uses FortyGuard tile-average air temperature, Open-Meteo humidity/surface pressure/preceding-hour radiation, and a separately verified exact 2 m wind observation. It never substitutes provider wet-bulb, clear-sky irradiance, or 10 m wind. `GET /api/v1/planning-runs/:id` retrieves the run and evidence. See [ADR 0005](docs/decisions/0005-node-planning-orchestration.md) and [ADR 0006](docs/decisions/0006-provider-input-normalization.md). No LLM is invoked. These routes require trusted-network use until access controls exist.
 
 ## Running tests
 
@@ -138,7 +138,7 @@ Open a bounded issue, branch using the convention in `CONTRIBUTING.md`, implemen
 - P0-02: deterministic Python thermal-engine contract and validated Liljegren pathway — implemented
 - P0-03: deterministic occupational safety rules — implemented
 - Internal CP-SAT slot optimization — implemented; human review required
-- Node planning orchestration for normalized inputs — implemented MVP
+- Node planning orchestration for normalized and provider-backed inputs — implemented MVP
 - Providers, access controls, production job recovery, UI, and AI explanation — planned
 
 ## Team

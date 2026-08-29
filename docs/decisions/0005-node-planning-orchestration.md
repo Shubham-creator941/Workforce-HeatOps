@@ -22,7 +22,7 @@ Bounds are 20 tasks, 10 crews, 30 zones, 24 slots, and 720 snapshots, also subje
 
 `QUEUED -> ALIGNING_DATA -> CALCULATING_THERMAL -> EVALUATING_SAFETY -> OPTIMIZING -> READY_FOR_REVIEW`
 
-Each transition is checked and persisted before the next service stage starts. Existing `FETCHING_FORTYGUARD`, `FETCHING_METEOROLOGY`, and `GENERATING_EXPLANATION` statuses are unused, not simulated.
+Each transition is checked and persisted before the next service stage starts. Provider-backed requests use `FETCHING_FORTYGUARD` and `FETCHING_METEOROLOGY`; caller-normalized requests enter alignment directly. `GENERATING_EXPLANATION` remains unused. ADR 0006 defines provider normalization.
 
 1. Thermal receives the normalized snapshots, contract/model identity, and planning-run ID. Node preserves the model metadata, components, diagnostics, and warnings. Missing/duplicate/mismatched response IDs fail the run. `INVALID_INPUT`/`UNSUPPORTED_INPUT` become `INSUFFICIENT_DATA`; `MODEL_NON_CONVERGENCE` becomes `FAILED`.
 2. Safety receives the exact returned Estimated Outdoor WBGT for every task/eligible-crew/zone/slot combination, plus the supplied workload, PPE, and acclimatization. Requests are split at Python's 1000-evaluation limit. `SAME_AS_WORK` is sent only to satisfy the existing compatibility input; no break schedule is inferred. Identity and input echoes are verified. All valid safety responses and rule evidence are retained.

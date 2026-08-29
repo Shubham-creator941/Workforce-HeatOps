@@ -13,7 +13,7 @@ import { planningRouter } from "./routes/planning.js";
 import type { PlanningService } from "./planning/service.js";
 
 export function createApp(
-  config: Config,
+  config: Pick<Config, "CORS_ORIGIN" | "LOG_LEVEL"> & Partial<Config>,
   database: DatabaseHealth,
   decisionEngine: DecisionEngineHealth,
   planning?: PlanningService,

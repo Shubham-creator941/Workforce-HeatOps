@@ -15,6 +15,7 @@ import {
 import { createApp } from "../app.js";
 import { createPlanningDecisionEngine } from "../decision-engine/planning-client.js";
 import { createPlanningService } from "./service.js";
+import type { PlanningProviders } from "./service.js";
 import {
   PlanningPersistenceError,
   createPrismaPlanningRunStore,
@@ -283,17 +284,137 @@ function transport(mode: Mode = "ok") {
   });
 }
 
-function setup(mode: Mode = "ok") {
+function setup(mode: Mode = "ok", providers?: PlanningProviders) {
   const store = new MemoryStore();
   const fetcher = transport(mode);
   const service = createPlanningService(
     store,
     createPlanningDecisionEngine("http://python.test", 100, fetcher),
+    providers,
   );
   return { store, fetcher, service };
 }
 
 describe("planning orchestration", () => {
+  it("fetches providers, normalizes verified fields, and preserves provenance", async () => {
+    const data = input();
+    const providerInput = PlanningRequestSchema.parse({
+      ...data,
+      slotDurationMinutes: 60,
+      timeSlots: [{ id: "s0", endAt: "2026-08-28T18:00:00Z" }],
+      tasks: data.tasks.map((task) => ({
+        ...task,
+        availableSlotIds: ["s0"],
+      })),
+      crews: data.crews.map((crew) => ({
+        ...crew,
+        availableSlotIds: ["s0"],
+      })),
+      zones: [{ id: "z", capacity: 1, availableSlotIds: ["s0"] }],
+      snapshots: [],
+      environmentalSource: {
+        mode: "PROVIDERS",
+        timeZone: "America/Phoenix",
+        zones: [
+          {
+            zoneId: "z",
+            samplePoint: [-112, 33],
+            polygon: [
+              [-112.01, 32.99],
+              [-111.99, 32.99],
+              [-111.99, 33.01],
+              [-112.01, 33.01],
+              [-112.01, 32.99],
+            ],
+          },
+        ],
+        verifiedWind2m: [
+          {
+            zoneId: "z",
+            slotId: "s0",
+            windSpeedMs: 1.7,
+            measurementHeightM: 2,
+            observedAt: "2026-08-28T18:00:00Z",
+            sourceRef: "onsite-anemometer-17",
+          },
+        ],
+      },
+    });
+    const meteorologyMock = vi.fn(() =>
+      Promise.resolve({
+        returnedTimestamp: "2026-08-28T18:00",
+        relativeHumidityPercent: 36,
+        surfacePressureHpa: 991.2,
+        shortwaveRadiationWm2: 642,
+      }),
+    );
+    const providers: PlanningProviders = {
+      fortyGuard: {
+        temperature: vi.fn(() =>
+          Promise.resolve({
+            activityId: "activity",
+            tileId: "tile",
+            averageTemperatureC: 34.25,
+            minTemperatureC: 33.8,
+            maxTemperatureC: 34.9,
+            submittedStartDate: "2026-08-28",
+            submittedStartTime: "10:00",
+            submittedTimeZone: "America/Phoenix",
+            alignedIntervalStart: "2026-08-28T17:00:00.000Z",
+            alignedIntervalEnd: "2026-08-28T18:00:00.000Z",
+          }),
+        ),
+      },
+      meteorology: {
+        meteorology: meteorologyMock,
+      },
+    };
+    const { service, fetcher } = setup("ok", providers);
+    const result = await service.run(providerInput, "provider-test");
+    expect(result.history.slice(0, 4)).toEqual([
+      "QUEUED",
+      "FETCHING_FORTYGUARD",
+      "FETCHING_METEOROLOGY",
+      "ALIGNING_DATA",
+    ]);
+    expect(result.status).toBe("READY_FOR_REVIEW");
+    expect(result.normalizedSnapshots[0]).toMatchObject({
+      airTemperatureC: 34.25,
+      relativeHumidityPercent: 36,
+      surfacePressureHpa: 991.2,
+      solarRadiationWm2: 642,
+      windSpeedMs: 1.7,
+      windMeasurementHeightM: 2,
+    });
+    expect(result.environmentalEvidence[0]).toMatchObject({
+      fortyGuard: {
+        minTemperatureC: 33.8,
+        maxTemperatureC: 34.9,
+        responseTimestampSemantics: "NOT_PROVIDED",
+      },
+      meteorology: { radiationSemantics: "PRECEDING_HOUR_MEAN" },
+      wind: { sourceRef: "onsite-anemometer-17" },
+    });
+    const thermalBody: unknown = JSON.parse(bodyOf(fetcher.mock.calls[0]?.[1]));
+    expect(ThermalBatchRequestSchema.parse(thermalBody).items[0]).toMatchObject(
+      {
+        airTemperatureC: 34.25,
+        windSpeedMs: 1.7,
+        windMeasurementHeightM: 2,
+      },
+    );
+    meteorologyMock.mockResolvedValueOnce({
+      returnedTimestamp: "2026-08-28T17:00",
+      relativeHumidityPercent: 36,
+      surfacePressureHpa: 991.2,
+      shortwaveRadiationWm2: 642,
+    });
+    const failed = setup("ok", providers);
+    const failedRun = await failed.service.run(providerInput, "misaligned");
+    expect(failedRun.status).toBe("INSUFFICIENT_DATA");
+    expect(failedRun.error?.code).toBe("OPEN_METEO_TEMPORAL_ALIGNMENT");
+    expect(failed.fetcher).not.toHaveBeenCalled();
+  });
   it("splits safety requests at the Python batch limit without losing entries", async () => {
     const { service, fetcher } = setup("solver-failed");
     const data = input();
