@@ -608,6 +608,47 @@ export const SupervisorPlanningResultSchema = z
 export type SupervisorPlanningResult = z.infer<
   typeof SupervisorPlanningResultSchema
 >;
+export const PlanningExplanationSchema = z
+  .object({
+    planningRunId: z.uuid(),
+    kind: z.literal("AI_EXPLANATION"),
+    sourceMode: z.enum(["LIVE_AI", "CHECKED_IN_DEMO_FIXTURE"]),
+    model: Id,
+    generatedAt: z.iso.datetime({ offset: true }),
+    disclaimer: z.literal(
+      "AI explanation of persisted deterministic results. It does not calculate or change thermal, safety, or optimization decisions.",
+    ),
+    summary: z.string().min(1).max(2000),
+    assignmentExplanations: z.array(
+      z
+        .object({
+          taskId: Id,
+          crewId: Id,
+          explanation: z.string().min(1).max(2000),
+          deterministicEvidenceRefs: z.array(Id).min(1),
+        })
+        .strict(),
+    ),
+    unscheduledExplanations: z.array(
+      z
+        .object({
+          taskId: Id,
+          explanation: z.string().min(1).max(2000),
+          deterministicEvidenceRefs: z.array(Id),
+        })
+        .strict(),
+    ),
+    evidence: z
+      .object({
+        estimatedOutdoorWbgtC: z.array(Finite),
+        safetyDecisions: z.array(SafetyDecisionSchema),
+        optimizerStatus: SolverStatusSchema.nullable(),
+        constraintsReferenced: z.array(Id),
+      })
+      .strict(),
+  })
+  .strict();
+export type PlanningExplanation = z.infer<typeof PlanningExplanationSchema>;
 export type ThermalBatchRequest = z.infer<typeof ThermalBatchRequestSchema>;
 export type ThermalBatchResponse = z.infer<typeof ThermalBatchResponseSchema>;
 export type SafetyBatchRequest = z.infer<typeof SafetyBatchRequestSchema>;

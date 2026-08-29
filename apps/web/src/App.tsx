@@ -31,8 +31,10 @@ import {
   useNavigate,
 } from "react-router-dom";
 import {
+  PlanningExplanationSchema,
   PlanningRunSchema,
   SupervisorPlanningResultSchema,
+  type PlanningExplanation,
   type PlanningRequest,
   type SupervisorPlanningResult,
 } from "@heatops/contracts";
@@ -47,6 +49,8 @@ type Context = {
   run: (scenario: "demo" | "live") => Promise<void>;
   result: SupervisorPlanningResult | undefined;
   demo: boolean;
+  explanation: PlanningExplanation | undefined;
+  explanationError: string | undefined;
 };
 const names: Record<string, string> = {
   "zone-east": "East Structure",
@@ -533,6 +537,50 @@ function Plan({ context }: { context: Context }) {
         </NavLink>
       </PageHead>
       <Story result={r} />
+      <section className="card ai-explanation" aria-label="AI explanation">
+        <div className="ai-title">
+          <Sparkles />
+          <div>
+            <span>AI EXPLANATION</span>
+            <h2>Why did HeatOps do this?</h2>
+          </div>
+          <strong>Deterministic decisions remain authoritative</strong>
+        </div>
+        {context.explanation ? (
+          <>
+            <p>{context.explanation.summary}</p>
+            {context.explanation.assignmentExplanations.map((item) => (
+              <article key={item.taskId + item.crewId}>
+                <b>
+                  {name(item.taskId)} → {name(item.crewId)}
+                </b>
+                <span>{item.explanation}</span>
+                <small>
+                  Evidence: {item.deterministicEvidenceRefs.join(", ")}
+                </small>
+              </article>
+            ))}
+            {context.explanation.unscheduledExplanations.map((item) => (
+              <article key={item.taskId}>
+                <b>{name(item.taskId)} · Unscheduled</b>
+                <span>{item.explanation}</span>
+                <small>
+                  Evidence:{" "}
+                  {item.deterministicEvidenceRefs.join(", ") || "run status"}
+                </small>
+              </article>
+            ))}
+            <div className="ai-boundary">
+              <ShieldCheck /> {context.explanation.disclaimer}
+            </div>
+          </>
+        ) : (
+          <p className="ai-unavailable">
+            {context.explanationError ??
+              "Run a planning scenario to request an explanation of its persisted result."}
+          </p>
+        )}
+      </section>
       <section className="plan-layout">
         <article className="card timeline-card">
           <div className="section-head">
@@ -1165,10 +1213,14 @@ function Provider({
 export function App() {
   const navigate = useNavigate();
   const [state, setState] = useState<RunState>({ kind: "idle" });
+  const [explanation, setExplanation] = useState<PlanningExplanation>();
+  const [explanationError, setExplanationError] = useState<string>();
   const result = state.kind === "success" ? state.result : undefined;
   const demo = state.kind === "success" && state.demo;
   async function run(scenario: "demo" | "live") {
     setState({ kind: "loading" });
+    setExplanation(undefined);
+    setExplanationError(undefined);
     try {
       if (scenario === "demo") {
         const parsed = SupervisorPlanningResultSchema.parse(
@@ -1179,6 +1231,18 @@ export function App() {
         );
         setState({ kind: "success", result: parsed, demo: true });
         void navigate("/plan");
+        try {
+          setExplanation(
+            PlanningExplanationSchema.parse(
+              await api("/api/v1/planning-runs/demo/explanation", {
+                method: "POST",
+                body: JSON.stringify({ planningRunId: parsed.planningRunId }),
+              }),
+            ),
+          );
+        } catch (error) {
+          setExplanationError((error as Error).message);
+        }
         return;
       }
       const created = PlanningRunSchema.parse(
@@ -1192,6 +1256,18 @@ export function App() {
       );
       setState({ kind: "success", result: parsed, demo: false });
       void navigate("/plan");
+      try {
+        setExplanation(
+          PlanningExplanationSchema.parse(
+            await api(`/api/v1/planning-runs/${created.id}/explanation`, {
+              method: "POST",
+              body: "{}",
+            }),
+          ),
+        );
+      } catch (error) {
+        setExplanationError((error as Error).message);
+      }
     } catch (error) {
       const failure = error as Error & { code?: string };
       setState({
@@ -1202,7 +1278,14 @@ export function App() {
       void navigate("/mission");
     }
   }
-  const context: Context = { state, run, result, demo };
+  const context: Context = {
+    state,
+    run,
+    result,
+    demo,
+    explanation,
+    explanationError,
+  };
   return (
     <Routes>
       <Route path="/mission" element={<Mission context={context} />} />

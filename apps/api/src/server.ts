@@ -9,6 +9,7 @@ import { createPlanningService } from "./planning/service.js";
 import { createPrismaPlanningRunStore } from "./planning/store.js";
 import { createFortyGuardClient } from "./providers/fortyguard.js";
 import { createOpenMeteoClient } from "./providers/open-meteo.js";
+import { createOpenAiPlanningExplainer } from "./planning/explanation.js";
 
 const config = loadConfig();
 const prisma = new PrismaClient();
@@ -37,6 +38,11 @@ const server = createServer(
         }),
       },
     ),
+    createOpenAiPlanningExplainer({
+      ...(config.OPENAI_API_KEY ? { apiKey: config.OPENAI_API_KEY } : {}),
+      model: config.OPENAI_EXPLANATION_MODEL,
+      baseUrl: config.OPENAI_BASE_URL,
+    }),
   ),
 );
 

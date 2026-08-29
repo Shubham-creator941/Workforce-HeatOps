@@ -613,6 +613,76 @@ input {
   grid-template-columns: minmax(0, 1fr) 285px;
   gap: 14px;
 }
+.ai-explanation {
+  margin-bottom: 14px;
+  padding: 17px;
+  background: linear-gradient(135deg, #11142c, #0a111d 62%);
+}
+.ai-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.ai-title > svg {
+  color: #a987ff;
+  width: 28px;
+}
+.ai-title div {
+  display: grid;
+}
+.ai-title span {
+  color: #aa88ff;
+  font: 700 9px Manrope;
+  letter-spacing: 0.12em;
+}
+.ai-title h2 {
+  margin: 2px 0 0;
+  font: 700 17px Manrope;
+}
+.ai-title > strong {
+  margin-left: auto;
+  color: #72dd9a;
+  font-size: 9px;
+}
+.ai-explanation > p {
+  color: #aeb7c5;
+  font-size: 11px;
+  line-height: 1.65;
+}
+.ai-explanation > article {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+  padding: 12px;
+  border: 1px solid #302853;
+  border-radius: 7px;
+  background: #0c1220;
+  font-size: 10px;
+}
+.ai-explanation > article span {
+  color: #a1acbb;
+  line-height: 1.55;
+}
+.ai-explanation > article small {
+  color: #806fa7;
+}
+.ai-boundary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid #282440;
+  color: #929cad;
+  font-size: 9px;
+}
+.ai-boundary svg {
+  width: 15px;
+  color: #65d98f;
+}
+.ai-unavailable {
+  color: #8e99aa;
+}
 .timeline-card {
   min-height: 330px;
 }

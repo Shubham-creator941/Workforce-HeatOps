@@ -23,6 +23,24 @@ const result = {
   },
   error: null,
 };
+const explanation = {
+  planningRunId: result.planningRunId,
+  kind: "AI_EXPLANATION",
+  sourceMode: "CHECKED_IN_DEMO_FIXTURE",
+  model: "golden-demo-explanation-v1",
+  generatedAt: "2026-08-28T18:00:00Z",
+  disclaimer:
+    "AI explanation of persisted deterministic results. It does not calculate or change thermal, safety, or optimization decisions.",
+  summary: "The persisted optimizer result assigned the task.",
+  assignmentExplanations: [],
+  unscheduledExplanations: [],
+  evidence: {
+    estimatedOutdoorWbgtC: [],
+    safetyDecisions: [],
+    optimizerStatus: "OPTIMAL",
+    constraintsReferenced: ["hard safety feasibility"],
+  },
+};
 function renderApp(path = "/mission") {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -65,21 +83,23 @@ describe("HeatOps application navigation", () => {
   it("runs checked-in demo evidence through the Node endpoint and opens the plan", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValue(
+      .mockResolvedValueOnce(
         Response.json(
           { data: result, meta: { evidenceMode: "CHECKED_IN_DEMO_FIXTURE" } },
           { status: 201 },
         ),
-      );
+      )
+      .mockResolvedValueOnce(Response.json({ data: explanation }));
     vi.stubGlobal("fetch", fetchMock);
     renderApp();
     fireEvent.click(screen.getByRole("button", { name: /Run HeatOps/ }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/planning-runs/demo");
     expect(
       await screen.findByRole("heading", { name: "Optimized Plan" }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("OPTIMAL")).toHaveLength(3);
+    expect(await screen.findByText(explanation.summary)).toBeInTheDocument();
   });
 
   it("supports click-through from plan to evidence", () => {

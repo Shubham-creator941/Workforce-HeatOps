@@ -13,6 +13,12 @@ const ConfigSchema = z.object({
   ),
   FORTYGUARD_BASE_URL: z.string().url().default("https://api.fortyguard.com"),
   OPEN_METEO_BASE_URL: z.string().url().default("https://api.open-meteo.com"),
+  OPENAI_API_KEY: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().min(1).optional(),
+  ),
+  OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
+  OPENAI_EXPLANATION_MODEL: z.string().min(1).default("gpt-5-mini"),
   PROVIDER_TIMEOUT_MS: z.coerce
     .number()
     .int()
@@ -37,6 +43,9 @@ type ProviderConfigKey =
   | "FORTYGUARD_API_KEY"
   | "FORTYGUARD_BASE_URL"
   | "OPEN_METEO_BASE_URL"
+  | "OPENAI_API_KEY"
+  | "OPENAI_BASE_URL"
+  | "OPENAI_EXPLANATION_MODEL"
   | "PROVIDER_TIMEOUT_MS"
   | "FORTYGUARD_POLL_ATTEMPTS"
   | "FORTYGUARD_POLL_INTERVAL_MS";

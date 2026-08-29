@@ -11,12 +11,14 @@ import { errorHandler } from "./middleware/errors.js";
 import { healthRouter } from "./routes/health.js";
 import { planningRouter } from "./routes/planning.js";
 import type { PlanningService } from "./planning/service.js";
+import type { PlanningExplainer } from "./planning/explanation.js";
 
 export function createApp(
   config: Pick<Config, "CORS_ORIGIN" | "LOG_LEVEL"> & Partial<Config>,
   database: DatabaseHealth,
   decisionEngine: DecisionEngineHealth,
   planning?: PlanningService,
+  explainer?: PlanningExplainer,
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -26,7 +28,8 @@ export function createApp(
   app.use(correlationId);
   app.use(pinoHttp({ logger: pino({ level: config.LOG_LEVEL }) }));
   app.use("/api/v1/health", healthRouter(database, decisionEngine));
-  if (planning) app.use("/api/v1/planning-runs", planningRouter(planning));
+  if (planning)
+    app.use("/api/v1/planning-runs", planningRouter(planning, explainer));
   app.use((_request, response) =>
     response
       .status(404)
