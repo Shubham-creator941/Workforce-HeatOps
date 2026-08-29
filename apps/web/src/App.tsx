@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -38,6 +38,7 @@ import {
   type PlanningRequest,
   type SupervisorPlanningResult,
 } from "@heatops/contracts";
+import { ThermalZoneMap } from "./ThermalZoneMap.js";
 
 type RunState =
   | { kind: "idle" }
@@ -221,59 +222,6 @@ function PageHead({
   );
 }
 
-function ThermalMap({
-  result,
-}: {
-  result: SupervisorPlanningResult | undefined;
-}) {
-  const env = result?.environment[0];
-  const wbgt =
-    env?.thermal?.status === "VALID" ? env.thermal.estimatedWbgtC : null;
-  return (
-    <div className="thermal-map">
-      <div className="map-grid" />
-      <svg
-        viewBox="0 0 760 500"
-        role="img"
-        aria-label="Thermal zone visualization"
-      >
-        <path className="road" d="M-30 420 C180 350 225 120 430 -20" />
-        <path className="road thin" d="M80 -20 C260 160 520 190 790 110" />
-        <polygon
-          className="zone hot"
-          points="175,80 480,55 620,205 430,300 145,240"
-        />
-        <polygon
-          className="zone amber"
-          points="145,240 430,300 365,455 80,410"
-        />
-        <polygon
-          className="zone gold"
-          points="430,300 620,205 700,405 365,455"
-        />
-      </svg>
-      <div className="map-primary">
-        <small>ZONE EAST · 60 m TILE</small>
-        <strong>
-          {wbgt === null ? "Awaiting run" : `${wbgt.toFixed(1)}°C`}
-        </strong>
-        <span>Estimated Outdoor WBGT</span>
-      </div>
-      <div className="map-secondary">
-        <small>AIR TEMPERATURE</small>
-        <strong>
-          {env ? `${env.snapshot.airTemperatureC.toFixed(1)}°C` : "—"}
-        </strong>
-      </div>
-      <div className="map-legend">
-        <i />
-        <span>Provider-backed zone evidence</span>
-        <span>Demo map geometry</span>
-      </div>
-    </div>
-  );
-}
-
 function Progress({ state }: { state: RunState }) {
   const active =
     state.kind === "success"
@@ -317,9 +265,19 @@ function Progress({ state }: { state: RunState }) {
 
 function Mission({ context }: { context: Context }) {
   const [scenario, setScenario] = useState<"demo" | "live">("demo");
+  const [selectedZoneId, setSelectedZoneId] = useState<string>();
   const { result, state } = context;
-  const env = result?.environment[0];
-  const safety = result?.safety[0];
+  const activeZoneId =
+    selectedZoneId ?? result?.environment[0]?.snapshot.zoneId;
+  const env = result?.environment.find(
+    (item) => item.snapshot.zoneId === activeZoneId,
+  );
+  const safety = result?.safety.find(
+    (item) => item.context.zoneId === activeZoneId,
+  );
+  const selectZone = useCallback((zoneId: string) => {
+    setSelectedZoneId(zoneId);
+  }, []);
   const wbgt =
     env?.thermal?.status === "VALID" ? env.thermal.estimatedWbgtC : null;
   return (
@@ -408,13 +366,20 @@ function Mission({ context }: { context: Context }) {
             <h2>Thermal zone view</h2>
             <span className="badge">Estimated Outdoor WBGT</span>
           </div>
-          <ThermalMap result={result} />
+          <ThermalZoneMap
+            result={result}
+            loading={state.kind === "loading"}
+            selectedZoneId={activeZoneId}
+            onSelectZone={selectZone}
+          />
         </article>
         <aside className="mission-side">
           <article className="card safety-card">
             <div className="section-head">
               <h2>Safety evaluation</h2>
-              <small>Deterministic</small>
+              <small>
+                {activeZoneId ? name(activeZoneId) : "Deterministic"}
+              </small>
             </div>
             {safety ? (
               <>

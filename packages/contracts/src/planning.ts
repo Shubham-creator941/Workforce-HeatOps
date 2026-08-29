@@ -33,6 +33,12 @@ const CoordinateSchema = z.tuple([
   z.number().finite().min(-180).max(180),
   z.number().finite().min(-90).max(90),
 ]);
+export const GeoJsonPolygonSchema = z
+  .object({
+    type: z.literal("Polygon"),
+    coordinates: z.array(z.array(CoordinateSchema).min(4)).min(1),
+  })
+  .strict();
 const ProviderEnvironmentalSourceSchema = z
   .object({
     mode: z.literal("PROVIDERS"),
@@ -81,6 +87,7 @@ export const EnvironmentalEvidenceSchema = z
         provider: z.literal("FORTYGUARD_TEMPERATURE_API_V1"),
         activityId: Id,
         tileId: Id,
+        tileGeometry: GeoJsonPolygonSchema,
         granularityM: z.literal(60),
         averageTemperatureC: Finite,
         minTemperatureC: Finite,

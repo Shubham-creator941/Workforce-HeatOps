@@ -3,6 +3,9 @@ import { expect, test } from "@playwright/test";
 test("supervisor golden path preserves meaningful evidence across every view", async ({
   page,
 }) => {
+  await page.route("https://basemaps.cartocdn.com/**", (route) =>
+    route.abort(),
+  );
   await page.goto("/mission");
   await expect(
     page.getByRole("heading", { name: "Phoenix Riverside Build" }),
@@ -25,6 +28,25 @@ test("supervisor golden path preserves meaningful evidence across every view", a
       exact: false,
     }),
   ).toBeVisible();
+
+  await page.getByRole("link", { name: "Mission Control" }).click();
+  const map = page.getByRole("application", {
+    name: "Interactive thermal zone map",
+  });
+  await expect(map).toBeVisible();
+  await expect(map).toHaveAttribute("data-ready", "true");
+  await expect(page.getByText("OpenStreetMap")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Basemap unavailable. Verified zone geometry and evidence remain active.",
+    ),
+  ).toBeVisible();
+  const zone = page.getByRole("button", { name: "Select zone-east" });
+  await zone.click();
+  await expect(zone).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("34.25°C · tile-60m-1")).toBeVisible();
+  await expect(page.getByText("East Structure").last()).toBeVisible();
+  await page.getByRole("link", { name: "Optimized Plan" }).click();
 
   await page.getByRole("link", { name: "Evidence", exact: true }).click();
   await expect(

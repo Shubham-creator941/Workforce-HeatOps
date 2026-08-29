@@ -363,6 +363,18 @@ describe("planning orchestration", () => {
             submittedTimeZone: "America/Phoenix",
             alignedIntervalStart: "2026-08-28T17:00:00.000Z",
             alignedIntervalEnd: "2026-08-28T18:00:00.000Z",
+            tileGeometry: {
+              type: "Polygon" as const,
+              coordinates: [
+                [
+                  [-112.01, 32.99],
+                  [-111.99, 32.99],
+                  [-111.99, 33.01],
+                  [-112.01, 33.01],
+                  [-112.01, 32.99],
+                ],
+              ] as [number, number][][],
+            },
           }),
         ),
       },

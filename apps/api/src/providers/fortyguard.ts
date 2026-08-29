@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ProviderError, providerKindForStatus } from "./errors.js";
 
-type Coordinate = readonly [number, number];
+type Coordinate = [number, number];
 export interface FortyGuardTemperatureRequest {
   polygon: Coordinate[];
   samplePoint: Coordinate;
@@ -20,6 +20,10 @@ export interface FortyGuardTemperature {
   submittedTimeZone: string;
   alignedIntervalStart: string;
   alignedIntervalEnd: string;
+  tileGeometry: {
+    type: "Polygon";
+    coordinates: Coordinate[][];
+  };
 }
 export interface FortyGuardClient {
   temperature(
@@ -273,7 +277,8 @@ export function createFortyGuardClient(options: {
         });
         if (matches.length !== 1)
           throw new ProviderError("FORTYGUARD", "MISSING_DATA");
-        const properties = matches[0]?.properties;
+        const match = matches[0];
+        const properties = match?.properties;
         if (
           !properties ||
           properties.min_temperature > properties.average_temperature ||
@@ -291,6 +296,7 @@ export function createFortyGuardClient(options: {
           submittedTimeZone: input.timeZone,
           alignedIntervalStart: start.toISOString(),
           alignedIntervalEnd: end.toISOString(),
+          tileGeometry: match.geometry,
         };
       }
       throw new ProviderError("FORTYGUARD", "TIMEOUT");

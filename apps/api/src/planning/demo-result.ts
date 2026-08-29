@@ -38,6 +38,18 @@ export const supervisorDemoResult: SupervisorPlanningResult =
             provider: "FORTYGUARD_TEMPERATURE_API_V1",
             activityId: "verified-activity",
             tileId: "tile-60m-1",
+            tileGeometry: {
+              type: "Polygon",
+              coordinates: [
+                [
+                  [-112.01, 32.99],
+                  [-111.99, 32.99],
+                  [-111.99, 33.01],
+                  [-112.01, 33.01],
+                  [-112.01, 32.99],
+                ],
+              ],
+            },
             granularityM: 60,
             averageTemperatureC: 34.25,
             minTemperatureC: 33.8,
