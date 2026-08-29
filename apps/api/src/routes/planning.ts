@@ -3,9 +3,22 @@ import { z } from "zod";
 import { PlanningRunSchema } from "@heatops/contracts";
 import type { PlanningService } from "../planning/service.js";
 import { toSupervisorPlanningResult } from "../planning/supervisor-result.js";
+import { supervisorDemoResult } from "../planning/demo-result.js";
 
 export function planningRouter(service: PlanningService): Router {
   const router = Router();
+  router.post("/demo", (request, response) => {
+    z.object({ scenarioId: z.literal("phoenix-golden-v1") })
+      .strict()
+      .parse(request.body);
+    response.status(201).json({
+      data: supervisorDemoResult,
+      meta: {
+        correlationId: request.correlationId,
+        evidenceMode: "CHECKED_IN_DEMO_FIXTURE",
+      },
+    });
+  });
   router.post("/", async (request, response) => {
     const run = PlanningRunSchema.parse(
       await service.run(request.body, request.correlationId),

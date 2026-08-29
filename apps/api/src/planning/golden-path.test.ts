@@ -204,6 +204,22 @@ describe("provider-backed planning golden path", () => {
       service,
     );
 
+    const demo = await request(app)
+      .post("/api/v1/planning-runs/demo")
+      .send({ scenarioId: "phoenix-golden-v1" })
+      .expect(201);
+    const demoBody: unknown = demo.body;
+    expect(
+      z.object({ data: SupervisorPlanningResultSchema }).parse(demoBody).data,
+    ).toMatchObject({
+      status: "READY_FOR_REVIEW",
+      site: { name: "Phoenix Riverside Build · Demo Scenario" },
+      schedule: { solverStatus: "OPTIMAL" },
+    });
+    expect(fortyGuardTransport).not.toHaveBeenCalled();
+    expect(meteorologyTransport).not.toHaveBeenCalled();
+    expect(pythonTransport).not.toHaveBeenCalled();
+
     const created = await request(app)
       .post("/api/v1/planning-runs")
       .set("x-correlation-id", "golden-demo")
