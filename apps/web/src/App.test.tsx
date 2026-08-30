@@ -129,6 +129,12 @@ describe("HeatOps application navigation", () => {
     fireEvent.change(screen.getByLabelText("Scenario"), {
       target: { value: "live" },
     });
+    fireEvent.change(screen.getByLabelText("Trusted 2 m wind speed"), {
+      target: { value: "1.7" },
+    });
+    fireEvent.change(screen.getByLabelText("Trusted wind source reference"), {
+      target: { value: "onsite-anemometer-observation-42" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /Run HeatOps/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Trusted 2 m wind is missing.",

@@ -45,9 +45,17 @@ type RunState =
   | { kind: "loading" }
   | { kind: "success"; result: SupervisorPlanningResult; demo: boolean }
   | { kind: "error"; message: string; code?: string };
+type LiveProviderInputs = {
+  windSpeedMs: string;
+  observedAt: string;
+  sourceRef: string;
+};
 type Context = {
   state: RunState;
-  run: (scenario: "demo" | "live") => Promise<void>;
+  run: (
+    scenario: "demo" | "live",
+    liveInputs?: LiveProviderInputs,
+  ) => Promise<void>;
   result: SupervisorPlanningResult | undefined;
   demo: boolean;
   explanation: PlanningExplanation | undefined;
@@ -75,14 +83,35 @@ const fmt = (value?: string) =>
     : "—";
 
 async function api(path: string, init?: RequestInit): Promise<unknown> {
-  const response = await fetch(path, {
-    ...init,
-    headers: { "content-type": "application/json", ...init?.headers },
-  });
-  const body = (await response.json()) as {
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...init,
+      headers: { "content-type": "application/json", ...init?.headers },
+    });
+  } catch {
+    throw Object.assign(
+      new Error(
+        "The HeatOps planning API is unavailable. Start or configure the Node API and try again.",
+      ),
+      { code: "PLANNING_API_UNAVAILABLE" },
+    );
+  }
+  const raw = await response.text();
+  let body: {
     data?: unknown;
     error?: { code?: string; message?: string };
   };
+  try {
+    body = JSON.parse(raw) as typeof body;
+  } catch {
+    throw Object.assign(
+      new Error(
+        "The planning API returned an invalid response. Check the API and provider configuration.",
+      ),
+      { code: "INVALID_API_RESPONSE" },
+    );
+  }
   if (!response.ok)
     throw Object.assign(
       new Error(body.error?.message ?? `Request failed (${response.status})`),
@@ -91,11 +120,31 @@ async function api(path: string, init?: RequestInit): Promise<unknown> {
   return body.data;
 }
 
-function liveRequest(): PlanningRequest {
-  const end = new Date();
-  end.setUTCMinutes(0, 0, 0);
-  end.setUTCHours(end.getUTCHours() + 1);
-  const endAt = end.toISOString();
+function liveRequest(inputs: LiveProviderInputs): PlanningRequest {
+  const windSpeedMs = Number(inputs.windSpeedMs);
+  if (
+    inputs.windSpeedMs.trim() === "" ||
+    !Number.isFinite(windSpeedMs) ||
+    windSpeedMs < 0
+  )
+    throw Object.assign(new Error("Enter a valid trusted 2 m wind speed."), {
+      code: "TRUSTED_WIND_CONFIGURATION",
+    });
+  if (!inputs.observedAt || Number.isNaN(Date.parse(inputs.observedAt)))
+    throw Object.assign(
+      new Error("Supply the exact trusted 2 m wind observation timestamp."),
+      {
+        code: "TRUSTED_WIND_CONFIGURATION",
+      },
+    );
+  if (!inputs.sourceRef.trim())
+    throw Object.assign(
+      new Error("Supply the trusted 2 m wind source reference."),
+      {
+        code: "TRUSTED_WIND_CONFIGURATION",
+      },
+    );
+  const endAt = new Date(inputs.observedAt).toISOString();
   return {
     contractVersion: "1.0",
     site: { id: "site-demo", name: "Phoenix Riverside Build" },
@@ -149,10 +198,10 @@ function liveRequest(): PlanningRequest {
         {
           zoneId: "zone-east",
           slotId: "hour-1",
-          windSpeedMs: 1.7,
+          windSpeedMs,
           measurementHeightM: 2,
           observedAt: endAt,
-          sourceRef: "trusted-onsite-anemometer-demo",
+          sourceRef: inputs.sourceRef.trim(),
         },
       ],
     },
@@ -265,6 +314,16 @@ function Progress({ state }: { state: RunState }) {
 
 function Mission({ context }: { context: Context }) {
   const [scenario, setScenario] = useState<"demo" | "live">("demo");
+  const [liveInputs, setLiveInputs] = useState<LiveProviderInputs>(() => {
+    const nextHour = new Date();
+    nextHour.setUTCMinutes(0, 0, 0);
+    nextHour.setUTCHours(nextHour.getUTCHours() + 1);
+    return {
+      windSpeedMs: "",
+      observedAt: nextHour.toISOString(),
+      sourceRef: "",
+    };
+  });
   const [selectedZoneId, setSelectedZoneId] = useState<string>();
   const { result, state } = context;
   const activeZoneId =
@@ -301,12 +360,15 @@ function Mission({ context }: { context: Context }) {
           <div>
             <Wind />
             <span>
-              <small>TRUSTED 2 m WIND</small>1.7 m/s · on-site demo observation
+              <small>TRUSTED 2 m WIND</small>
+              {scenario === "demo"
+                ? "1.7 m/s · verified demo observation"
+                : "Exact-height observation required"}
             </span>
           </div>
           <button
             className="primary"
-            onClick={() => void context.run(scenario)}
+            onClick={() => void context.run(scenario, liveInputs)}
             disabled={state.kind === "loading"}
           >
             {state.kind === "loading" ? (
@@ -324,6 +386,58 @@ function Mission({ context }: { context: Context }) {
           Golden Demo Evidence uses checked-in verified evidence through the
           Node API. No live provider calls.
         </div>
+      )}
+      {scenario === "live" && (
+        <section
+          className="live-config card"
+          aria-label="Live Provider configuration"
+        >
+          <div>
+            <b>Live Provider requirements</b>
+            <span>
+              Server-side FortyGuard credentials and Open-Meteo access must be
+              configured. The trusted wind observation must be measured at
+              exactly 2 m and temporally aligned to the planning slot.
+            </span>
+          </div>
+          <label>
+            Trusted 2 m wind (m/s)
+            <input
+              aria-label="Trusted 2 m wind speed"
+              inputMode="decimal"
+              value={liveInputs.windSpeedMs}
+              onChange={(event) =>
+                setLiveInputs({
+                  ...liveInputs,
+                  windSpeedMs: event.target.value,
+                })
+              }
+              placeholder="Required"
+            />
+          </label>
+          <label>
+            Exact observation timestamp (UTC)
+            <input
+              aria-label="Trusted wind observation timestamp"
+              value={liveInputs.observedAt}
+              onChange={(event) =>
+                setLiveInputs({ ...liveInputs, observedAt: event.target.value })
+              }
+              placeholder="2026-08-28T18:00:00Z"
+            />
+          </label>
+          <label>
+            Source reference
+            <input
+              aria-label="Trusted wind source reference"
+              value={liveInputs.sourceRef}
+              onChange={(event) =>
+                setLiveInputs({ ...liveInputs, sourceRef: event.target.value })
+              }
+              placeholder="Required observation ID"
+            />
+          </label>
+        </section>
       )}
       {state.kind === "error" && (
         <div className="notice error" role="alert">
@@ -1182,7 +1296,10 @@ export function App() {
   const [explanationError, setExplanationError] = useState<string>();
   const result = state.kind === "success" ? state.result : undefined;
   const demo = state.kind === "success" && state.demo;
-  async function run(scenario: "demo" | "live") {
+  async function run(
+    scenario: "demo" | "live",
+    liveInputs?: LiveProviderInputs,
+  ) {
     setState({ kind: "loading" });
     setExplanation(undefined);
     setExplanationError(undefined);
@@ -1213,7 +1330,11 @@ export function App() {
       const created = PlanningRunSchema.parse(
         await api("/api/v1/planning-runs", {
           method: "POST",
-          body: JSON.stringify(liveRequest()),
+          body: JSON.stringify(
+            liveRequest(
+              liveInputs ?? { windSpeedMs: "", observedAt: "", sourceRef: "" },
+            ),
+          ),
         }),
       );
       const parsed = SupervisorPlanningResultSchema.parse(

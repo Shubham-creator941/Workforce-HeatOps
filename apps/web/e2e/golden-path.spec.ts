@@ -3,6 +3,20 @@ import { expect, test } from "@playwright/test";
 test("supervisor golden path preserves meaningful evidence across every view", async ({
   page,
 }) => {
+  let demoGeometry: unknown;
+  page.on("response", async (response) => {
+    if (response.url().endsWith("/api/v1/planning-runs/demo")) {
+      const body = (await response.json()) as {
+        data?: {
+          environment?: Array<{
+            providerEvidence?: { fortyGuard?: { tileGeometry?: unknown } };
+          }>;
+        };
+      };
+      demoGeometry =
+        body.data?.environment?.[0]?.providerEvidence?.fortyGuard?.tileGeometry;
+    }
+  });
   await page.route("https://basemaps.cartocdn.com/**", (route) =>
     route.abort(),
   );
@@ -17,6 +31,18 @@ test("supervisor golden path preserves meaningful evidence across every view", a
 
   await page.getByRole("button", { name: "Run HeatOps" }).click();
   await expect(page).toHaveURL(/\/plan$/);
+  expect(demoGeometry).toEqual({
+    type: "Polygon",
+    coordinates: [
+      [
+        [-112.01, 32.99],
+        [-111.99, 32.99],
+        [-111.99, 33.01],
+        [-112.01, 33.01],
+        [-112.01, 32.99],
+      ],
+    ],
+  });
   await expect(
     page.getByRole("heading", { name: "Optimized Plan" }),
   ).toBeVisible();
@@ -73,4 +99,54 @@ test("supervisor golden path preserves meaningful evidence across every view", a
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(page.getByText("Scientific controls are locked")).toBeVisible();
   await expect(page.getByText("CP_SAT_SLOTS_V1")).toBeVisible();
+});
+
+test("live mode requires trusted 2 m wind and shows provider configuration errors", async ({
+  page,
+}) => {
+  await page.goto("/mission");
+  await page.getByLabel("Scenario").selectOption("live");
+  await expect(
+    page.getByRole("region", { name: "Live Provider configuration" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Trusted 2 m wind speed")).toBeVisible();
+  await expect(
+    page.getByLabel("Trusted wind observation timestamp"),
+  ).not.toHaveValue("");
+  await expect(page.getByLabel("Trusted wind source reference")).toHaveValue(
+    "",
+  );
+
+  await page.getByRole("button", { name: "Run HeatOps" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "TRUSTED_WIND_CONFIGURATION",
+  );
+  await expect(page.getByRole("alert")).toContainText(
+    "valid trusted 2 m wind speed",
+  );
+
+  await page.getByLabel("Trusted 2 m wind speed").fill("1.7");
+  await page
+    .getByLabel("Trusted wind source reference")
+    .fill("onsite-anemometer-observation-42");
+  await page.route("**/api/v1/planning-runs", async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: {
+          code: "FORTYGUARD_CONFIGURATION",
+          message:
+            "FortyGuard API credentials are not configured on the planning API.",
+        },
+      }),
+    });
+  });
+  await page.getByRole("button", { name: "Run HeatOps" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "FORTYGUARD_CONFIGURATION",
+  );
+  await expect(page.getByRole("alert")).toContainText(
+    "credentials are not configured",
+  );
 });

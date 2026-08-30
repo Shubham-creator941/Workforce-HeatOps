@@ -209,12 +209,29 @@ describe("provider-backed planning golden path", () => {
       .send({ scenarioId: "phoenix-golden-v1" })
       .expect(201);
     const demoBody: unknown = demo.body;
-    expect(
-      z.object({ data: SupervisorPlanningResultSchema }).parse(demoBody).data,
-    ).toMatchObject({
+    const parsedDemo = z
+      .object({ data: SupervisorPlanningResultSchema })
+      .parse(demoBody).data;
+    expect(parsedDemo).toMatchObject({
       status: "READY_FOR_REVIEW",
       site: { name: "Phoenix Riverside Build · Demo Scenario" },
       schedule: { solverStatus: "OPTIMAL" },
+    });
+    const demoProviderEvidence = parsedDemo.environment[0]?.providerEvidence;
+    expect(demoProviderEvidence).not.toBeNull();
+    if (!demoProviderEvidence)
+      throw new Error("Expected demo provider evidence");
+    expect(demoProviderEvidence.fortyGuard.tileGeometry).toEqual({
+      type: "Polygon",
+      coordinates: [
+        [
+          [-112.01, 32.99],
+          [-111.99, 32.99],
+          [-111.99, 33.01],
+          [-112.01, 33.01],
+          [-112.01, 32.99],
+        ],
+      ],
     });
     expect(fortyGuardTransport).not.toHaveBeenCalled();
     expect(meteorologyTransport).not.toHaveBeenCalled();
