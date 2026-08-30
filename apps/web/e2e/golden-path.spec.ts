@@ -105,6 +105,29 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
 }) => {
   const mapRequests: string[] = [];
   page.on("request", (request) => mapRequests.push(request.url()));
+  const previewTiles = Array.from({ length: 1_174 }, (_, index) => {
+    const x = -112.01 + (index % 34) * 0.0005;
+    const y = 32.99 + Math.floor(index / 34) * 0.0005;
+    const averageTemperatureC = 30 + index / 100;
+    return {
+      tileId: String(index),
+      averageTemperatureC,
+      minTemperatureC: averageTemperatureC,
+      maxTemperatureC: averageTemperatureC,
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [x, y],
+            [x + 0.0004, y],
+            [x + 0.0004, y + 0.0004],
+            [x, y + 0.0004],
+            [x, y],
+          ],
+        ],
+      },
+    };
+  });
   await page.route("**/api/v1/provider-previews/fortyguard", async (route) => {
     await route.fulfill({
       status: 201,
@@ -120,26 +143,7 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
           submittedTimeZone: "America/Phoenix",
           alignedIntervalStart: "2026-08-30T16:00:00.000Z",
           alignedIntervalEnd: "2026-08-30T17:00:00.000Z",
-          tiles: [
-            {
-              tileId: "tile-live-1",
-              averageTemperatureC: 35.2,
-              minTemperatureC: 34.8,
-              maxTemperatureC: 35.9,
-              geometry: {
-                type: "Polygon",
-                coordinates: [
-                  [
-                    [-112.01, 32.99],
-                    [-111.99, 32.99],
-                    [-111.99, 33.01],
-                    [-112.01, 33.01],
-                    [-112.01, 32.99],
-                  ],
-                ],
-              },
-            },
-          ],
+          tiles: previewTiles,
         },
       }),
     });
@@ -158,7 +162,7 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
   );
   await page.getByRole("button", { name: "Preview Live FortyGuard" }).click();
   await expect(page.getByText("Activity mock-live-activity")).toBeVisible();
-  await expect(page.getByText("35.20°C")).toBeVisible();
+  await expect(page.getByText("30.00°C").first()).toBeVisible();
   await expect(
     page
       .getByText(
@@ -166,9 +170,30 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
       )
       .first(),
   ).toBeVisible();
+  const map = page.getByRole("application", {
+    name: "Interactive thermal zone map",
+  });
+  await expect(map).toHaveAttribute("data-ready", "true");
+  await expect(map).toHaveAttribute("data-feature-count", "1174");
+  await expect(map).toHaveAttribute("data-fit-feature-count", "1174");
+  const toolbarBox = await page.getByLabel("Map zones").boundingBox();
+  const viewportBox = await page.locator(".map-viewport").boundingBox();
+  expect(toolbarBox).not.toBeNull();
+  expect(viewportBox).not.toBeNull();
+  expect(toolbarBox!.y + toolbarBox!.height).toBeLessThanOrEqual(
+    viewportBox!.y,
+  );
+  expect(viewportBox!.height).toBeGreaterThanOrEqual(390);
+  await expect(page.getByTitle("Zoom in")).toBeVisible();
+  await expect(page.getByTitle("Zoom out")).toBeVisible();
+  await page.getByRole("button", { name: "Select 1161" }).click();
+  await expect(page.getByText("41.61°C").first()).toBeVisible();
+  await expect(map).toHaveAttribute("data-fit-feature-count", "1174");
+  await expect(page.getByText("Optimizer not run")).toBeVisible();
   await expect(
-    page.getByRole("application", { name: "Interactive thermal zone map" }),
-  ).toHaveAttribute("data-ready", "true");
+    page.getByText("Not run", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByText("Complete", { exact: true })).toHaveCount(0);
   expect(
     mapRequests.some((url) =>
       url.startsWith("https://tiles.openfreemap.org/styles/dark"),

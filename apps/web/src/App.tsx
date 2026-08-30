@@ -278,7 +278,31 @@ function PageHead({
   );
 }
 
-function Progress({ state }: { state: RunState }) {
+function Progress({
+  state,
+  previewOnly = false,
+}: {
+  state: RunState;
+  previewOnly?: boolean;
+}) {
+  if (previewOnly)
+    return (
+      <div className="progress-card card">
+        <div className="section-head">
+          <h3>Planning run</h3>
+          <span className="badge">Not run</span>
+        </div>
+        {["Evidence", "Thermal", "Safety", "Optimization", "Result"].map(
+          (x) => (
+            <div className="step" key={x}>
+              <span>—</span>
+              <b>{x}</b>
+              <small>Not run</small>
+            </div>
+          ),
+        )}
+      </div>
+    );
   const active =
     state.kind === "success"
       ? 5
@@ -343,6 +367,7 @@ function Mission({ context }: { context: Context }) {
     (item) => item.context.zoneId === activeZoneId,
   );
   const previewResult = preview.kind === "ready" ? preview.result : undefined;
+  const thermalPreviewMode = scenario === "live" && preview.kind !== "idle";
   const selectedPreviewTile =
     previewResult?.tiles.find((tile) => tile.tileId === activeZoneId) ??
     previewResult?.tiles[0];
@@ -391,7 +416,9 @@ function Mission({ context }: { context: Context }) {
     setSelectedZoneId(zoneId);
   }, []);
   const wbgt =
-    env?.thermal?.status === "VALID" ? env.thermal.estimatedWbgtC : null;
+    !thermalPreviewMode && env?.thermal?.status === "VALID"
+      ? env.thermal.estimatedWbgtC
+      : null;
   return (
     <Shell>
       <PageHead
@@ -545,32 +572,60 @@ function Mission({ context }: { context: Context }) {
           <small>Estimated Outdoor WBGT</small>
           <strong>{wbgt === null ? "—" : `${wbgt.toFixed(1)}°C`}</strong>
           <span>
-            {env ? name(env.snapshot.zoneId) : "Awaiting planning run"}
+            {thermalPreviewMode
+              ? "Unavailable in thermal preview"
+              : env
+                ? name(env.snapshot.zoneId)
+                : "Awaiting planning run"}
           </span>
         </div>
         <div className="stat">
           <small>Air temperature</small>
           <strong>
-            {env ? `${env.snapshot.airTemperatureC.toFixed(1)}°C` : "—"}
+            {selectedPreviewTile
+              ? `${selectedPreviewTile.averageTemperatureC.toFixed(2)}°C`
+              : env
+                ? `${env.snapshot.airTemperatureC.toFixed(1)}°C`
+                : "—"}
           </strong>
           <span>FortyGuard 60 m tile</span>
         </div>
         <div className="stat">
-          <small>Active zones</small>
-          <strong>{result ? result.environment.length : "—"}</strong>
-          <span>Evidence available</span>
+          <small>{thermalPreviewMode ? "Preview tiles" : "Active zones"}</small>
+          <strong>
+            {thermalPreviewMode
+              ? (previewResult?.tiles.length ?? "—")
+              : result
+                ? result.environment.length
+                : "—"}
+          </strong>
+          <span>
+            {thermalPreviewMode ? "Thermal preview only" : "Evidence available"}
+          </span>
         </div>
         <div className="stat">
           <small>Assignments</small>
-          <strong>{result?.schedule?.assignments.length ?? "—"}</strong>
-          <span>{result?.schedule?.solverStatus ?? "Not run"}</span>
+          <strong>
+            {thermalPreviewMode
+              ? "N/A"
+              : (result?.schedule?.assignments.length ?? "—")}
+          </strong>
+          <span>
+            {thermalPreviewMode
+              ? "Optimizer not run"
+              : (result?.schedule?.solverStatus ?? "Not run")}
+          </span>
         </div>
       </section>
       <section className="mission-grid">
         <article className="card map-card">
           <div className="section-head">
             <h2>Thermal zone view</h2>
-            <span className="badge">Estimated Outdoor WBGT</span>
+            <span className="badge">
+              {thermalPreviewMode
+                ? "FortyGuard air temperature"
+                : "Estimated Outdoor WBGT"}
+            </span>
           </div>
           <ThermalZoneMap
             result={result}
@@ -667,7 +722,7 @@ function Mission({ context }: { context: Context }) {
               <Empty />
             )}
           </article>
-          <Progress state={state} />
+          <Progress state={state} previewOnly={thermalPreviewMode} />
         </aside>
       </section>
       <Provenance result={result} />

@@ -29,6 +29,32 @@ type Zone = {
   geometry: Polygon;
 };
 
+export function featureCollectionBounds(
+  collection: FeatureCollection<Polygon>,
+): [[number, number], [number, number]] | null {
+  let west = Number.POSITIVE_INFINITY;
+  let south = Number.POSITIVE_INFINITY;
+  let east = Number.NEGATIVE_INFINITY;
+  let north = Number.NEGATIVE_INFINITY;
+  for (const feature of collection.features)
+    for (const ring of feature.geometry.coordinates)
+      for (const coordinate of ring) {
+        const longitude = coordinate[0];
+        const latitude = coordinate[1];
+        if (longitude === undefined || latitude === undefined) continue;
+        west = Math.min(west, longitude);
+        south = Math.min(south, latitude);
+        east = Math.max(east, longitude);
+        north = Math.max(north, latitude);
+      }
+  return Number.isFinite(west)
+    ? [
+        [west, south],
+        [east, north],
+      ]
+    : null;
+}
+
 function displayDecision(value: string): string {
   return value === "MANUAL_REVIEW_REQUIRED"
     ? "Manual Review Required"
@@ -80,6 +106,7 @@ export function ThermalZoneMap({
   const selectedRef = useRef<string | undefined>(undefined);
   const [basemapError, setBasemapError] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [fittedFeatureCount, setFittedFeatureCount] = useState(0);
   const zones = useMemo<Zone[]>(() => {
     if (preview)
       return preview.tiles.map((tile) => ({
@@ -127,6 +154,7 @@ export function ThermalZoneMap({
     if (!containerRef.current || zones.length === 0) return;
     setBasemapError(false);
     setMapReady(false);
+    setFittedFeatureCount(0);
     const values = zones
       .map((zone) => (preview ? zone.airTemperatureC : zone.estimatedWbgtC))
       .filter((value): value is number => value !== null);
@@ -148,6 +176,7 @@ export function ThermalZoneMap({
         },
       })),
     };
+    const completeBounds = featureCollectionBounds(collection);
     const first = zones[0]?.geometry.coordinates[0]?.[0];
     if (!first) return;
     const map = new maplibregl.Map({
@@ -167,6 +196,9 @@ export function ThermalZoneMap({
       closeButton: false,
       closeOnClick: false,
     });
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(containerRef.current);
+    let fitFrame = 0;
     let styleLoaded = false;
     let usingFallback = false;
     const activateFallback = () => {
@@ -205,17 +237,17 @@ export function ThermalZoneMap({
         source: "zones",
         paint: { "line-color": "#ffffff", "line-width": 1.5 },
       });
-      const bounds = new maplibregl.LngLatBounds();
-      for (const zone of zones)
-        for (const ring of zone.geometry.coordinates)
-          for (const coordinate of ring)
-            bounds.extend(coordinate as [number, number]);
-      map.fitBounds(bounds, {
-        padding: 48,
-        maxZoom: 17,
-        duration: 0,
+      fitFrame = window.requestAnimationFrame(() => {
+        map.resize();
+        if (completeBounds)
+          map.fitBounds(completeBounds, {
+            padding: { top: 44, right: 44, bottom: 44, left: 44 },
+            maxZoom: 17,
+            duration: 0,
+          });
+        setFittedFeatureCount(collection.features.length);
+        setMapReady(true);
       });
-      setMapReady(true);
       map.on("mouseenter", "zones-fill", (event) => {
         map.getCanvas().style.cursor = "pointer";
         const feature = event.features?.[0];
@@ -240,6 +272,8 @@ export function ThermalZoneMap({
     });
     return () => {
       window.clearTimeout(styleTimeout);
+      window.cancelAnimationFrame(fitFrame);
+      resizeObserver.disconnect();
       popup.remove();
       map.remove();
       mapRef.current = undefined;
@@ -260,20 +294,6 @@ export function ThermalZoneMap({
     );
   return (
     <div className="thermal-map interactive-map">
-      <div
-        ref={containerRef}
-        className="maplibre-host"
-        role="application"
-        aria-label="Interactive thermal zone map"
-        aria-busy={!mapReady}
-        data-ready={mapReady}
-      />
-      {basemapError && (
-        <div className="basemap-warning" role="status">
-          Basemap unavailable. Verified zone geometry and evidence remain
-          active.
-        </div>
-      )}
       <div className="zone-selectors" aria-label="Map zones">
         {zones.map((zone) => (
           <button
@@ -286,6 +306,24 @@ export function ThermalZoneMap({
             {zone.zoneId.replaceAll("-", " ")}
           </button>
         ))}
+      </div>
+      <div className="map-viewport">
+        <div
+          ref={containerRef}
+          className="maplibre-host"
+          role="application"
+          aria-label="Interactive thermal zone map"
+          aria-busy={!mapReady}
+          data-ready={mapReady}
+          data-feature-count={zones.length}
+          data-fit-feature-count={fittedFeatureCount}
+        />
+        {basemapError && (
+          <div className="basemap-warning" role="status">
+            Basemap unavailable. Verified zone geometry and evidence remain
+            active.
+          </div>
+        )}
       </div>
       <div className="map-legend">
         <i />
