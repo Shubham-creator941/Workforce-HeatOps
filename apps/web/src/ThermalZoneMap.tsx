@@ -8,18 +8,17 @@ import type {
   SupervisorPlanningResult,
 } from "@heatops/contracts";
 
-const BASEMAP_STYLE: StyleSpecification = {
+const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/dark";
+const FALLBACK_STYLE: StyleSpecification = {
   version: 8,
-  sources: {
-    basemap: {
-      type: "raster",
-      tiles: ["https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"],
-      tileSize: 256,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  sources: {},
+  layers: [
+    {
+      id: "fallback-background",
+      type: "background",
+      paint: { "background-color": "#07111e" },
     },
-  },
-  layers: [{ id: "basemap", type: "raster", source: "basemap" }],
+  ],
 };
 
 type Zone = {
@@ -168,8 +167,22 @@ export function ThermalZoneMap({
       closeButton: false,
       closeOnClick: false,
     });
-    map.on("error", () => setBasemapError(true));
+    let styleLoaded = false;
+    let usingFallback = false;
+    const activateFallback = () => {
+      if (styleLoaded || usingFallback) return;
+      usingFallback = true;
+      setBasemapError(true);
+      map.setStyle(FALLBACK_STYLE);
+    };
+    const styleTimeout = window.setTimeout(activateFallback, 2_500);
+    map.on("error", () => {
+      setBasemapError(true);
+      activateFallback();
+    });
     map.on("load", () => {
+      window.clearTimeout(styleTimeout);
+      styleLoaded = true;
       map.addSource("zones", { type: "geojson", data: collection });
       map.addLayer({
         id: "zones-fill",
@@ -226,6 +239,7 @@ export function ThermalZoneMap({
       });
     });
     return () => {
+      window.clearTimeout(styleTimeout);
       popup.remove();
       map.remove();
       mapRef.current = undefined;

@@ -17,7 +17,7 @@ test("supervisor golden path preserves meaningful evidence across every view", a
         body.data?.environment?.[0]?.providerEvidence?.fortyGuard?.tileGeometry;
     }
   });
-  await page.route("https://basemaps.cartocdn.com/**", (route) =>
+  await page.route("https://tiles.openfreemap.org/**", (route) =>
     route.abort(),
   );
   await page.goto("/mission");
@@ -61,7 +61,6 @@ test("supervisor golden path preserves meaningful evidence across every view", a
   });
   await expect(map).toBeVisible();
   await expect(map).toHaveAttribute("data-ready", "true");
-  await expect(page.getByText("OpenStreetMap")).toBeVisible();
   await expect(
     page.getByText(
       "Basemap unavailable. Verified zone geometry and evidence remain active.",
@@ -104,6 +103,8 @@ test("supervisor golden path preserves meaningful evidence across every view", a
 test("live mode requires trusted 2 m wind and shows provider configuration errors", async ({
   page,
 }) => {
+  const mapRequests: string[] = [];
+  page.on("request", (request) => mapRequests.push(request.url()));
   await page.route("**/api/v1/provider-previews/fortyguard", async (route) => {
     await route.fulfill({
       status: 201,
@@ -168,6 +169,12 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
   await expect(
     page.getByRole("application", { name: "Interactive thermal zone map" }),
   ).toHaveAttribute("data-ready", "true");
+  expect(
+    mapRequests.some((url) =>
+      url.startsWith("https://tiles.openfreemap.org/styles/dark"),
+    ),
+  ).toBe(true);
+  expect(mapRequests.some((url) => url.includes("carto.com"))).toBe(false);
 
   await page.getByRole("button", { name: "Run HeatOps" }).click();
   await expect(page.getByRole("alert")).toContainText(
