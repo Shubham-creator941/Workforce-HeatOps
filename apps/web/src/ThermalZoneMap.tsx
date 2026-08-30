@@ -1,64 +1,60 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
-import type { FeatureCollection, Polygon } from "geojson";
+import type { FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type {
   FortyGuardPreviewResult,
   SupervisorPlanningResult,
 } from "@heatops/contracts";
 
-const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/dark";
-const FALLBACK_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {},
-  layers: [
-    {
-      id: "fallback-background",
-      type: "background",
-      paint: { "background-color": "#07111e" },
-    },
-  ],
-};
-
+const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+const SOURCE_ID = "fortyguard-zones";
+const FILL_LAYER_ID = "fortyguard-fill";
+const OUTLINE_LAYER_ID = "fortyguard-outline";
+type AreaGeometry = Polygon | MultiPolygon;
 type Zone = {
   zoneId: string;
   airTemperatureC: number;
   estimatedWbgtC: number | null;
   safetyDecision: string;
-  geometry: Polygon;
+  geometry: AreaGeometry;
 };
 
+function coordinatesOf(geometry: AreaGeometry): number[][] {
+  return geometry.type === "Polygon"
+    ? geometry.coordinates.flat()
+    : geometry.coordinates.flat(2);
+}
 export function featureCollectionBounds(
-  collection: FeatureCollection<Polygon>,
+  collection: FeatureCollection<AreaGeometry>,
 ): [[number, number], [number, number]] | null {
-  let west = Number.POSITIVE_INFINITY;
-  let south = Number.POSITIVE_INFINITY;
-  let east = Number.NEGATIVE_INFINITY;
-  let north = Number.NEGATIVE_INFINITY;
+  let west = Infinity,
+    south = Infinity,
+    east = -Infinity,
+    north = -Infinity;
   for (const [featureIndex, feature] of collection.features.entries())
-    for (const ring of feature.geometry.coordinates)
-      for (const coordinate of ring) {
-        const longitude = coordinate[0];
-        const latitude = coordinate[1];
-        if (
-          longitude === undefined ||
-          latitude === undefined ||
-          !Number.isFinite(longitude) ||
-          !Number.isFinite(latitude) ||
-          longitude < -180 ||
-          longitude > 180 ||
-          latitude < -90 ||
-          latitude > 90
-        )
-          throw new Error(
-            `Invalid longitude/latitude in map feature ${featureIndex}.`,
-          );
-        west = Math.min(west, longitude);
-        south = Math.min(south, latitude);
-        east = Math.max(east, longitude);
-        north = Math.max(north, latitude);
-      }
+    for (const coordinate of coordinatesOf(feature.geometry)) {
+      const longitude = coordinate[0],
+        latitude = coordinate[1];
+      if (
+        longitude === undefined ||
+        latitude === undefined ||
+        !Number.isFinite(longitude) ||
+        !Number.isFinite(latitude) ||
+        longitude < -180 ||
+        longitude > 180 ||
+        latitude < -90 ||
+        latitude > 90
+      )
+        throw new Error(
+          `Invalid longitude/latitude in map feature ${featureIndex}.`,
+        );
+      west = Math.min(west, longitude);
+      south = Math.min(south, latitude);
+      east = Math.max(east, longitude);
+      north = Math.max(north, latitude);
+    }
   return Number.isFinite(west)
     ? [
         [west, south],
@@ -66,7 +62,6 @@ export function featureCollectionBounds(
       ]
     : null;
 }
-
 function displayDecision(value: string): string {
   return value === "MANUAL_REVIEW_REQUIRED"
     ? "Manual Review Required"
@@ -75,23 +70,13 @@ function displayDecision(value: string): string {
         .replaceAll("_", " ")
         .replace(/^./, (letter) => letter.toUpperCase());
 }
-
-function thermalColor(value: number | null, minimum: number, maximum: number) {
-  if (value === null) return "#64748b";
-  if (maximum === minimum) return "#ff8a2a";
-  const position = (value - minimum) / (maximum - minimum);
-  if (position < 0.34) return "#f5d742";
-  if (position < 0.67) return "#ff8a2a";
-  return "#ef4444";
-}
-
 function tooltip(zone: Zone): HTMLDivElement {
   const root = document.createElement("div");
   root.className = "map-tooltip";
   const title = document.createElement("strong");
   title.textContent = zone.zoneId.replaceAll("-", " ");
   const air = document.createElement("span");
-  air.textContent = `Air temperature: ${zone.airTemperatureC.toFixed(2)}°C`;
+  air.textContent = `FortyGuard average air temperature: ${zone.airTemperatureC.toFixed(2)}°C`;
   const wbgt = document.createElement("span");
   wbgt.textContent = `Estimated Outdoor WBGT: ${zone.estimatedWbgtC?.toFixed(3) ?? "Unavailable"}${zone.estimatedWbgtC === null ? "" : "°C"}`;
   const safety = document.createElement("span");
@@ -115,12 +100,11 @@ export function ThermalZoneMap({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | undefined>(undefined);
-  const selectedRef = useRef<string | undefined>(undefined);
-  const [basemapError, setBasemapError] = useState(false);
   const [mapReady, setMapReady] = useState(false);
-  const [fittedFeatureCount, setFittedFeatureCount] = useState(0);
-  const [geometryError, setGeometryError] = useState<string>();
-  const [zoneLayersReady, setZoneLayersReady] = useState(false);
+  const [mapError, setMapError] = useState<string>();
+  const [sourceFeatureCount, setSourceFeatureCount] = useState(0);
+  const [renderedFeatureCount, setRenderedFeatureCount] = useState(0);
+  const [basemapLayerCount, setBasemapLayerCount] = useState(0);
   const zones = useMemo<Zone[]>(() => {
     if (preview)
       return preview.tiles.map((tile) => ({
@@ -134,7 +118,6 @@ export function ThermalZoneMap({
       result?.environment.flatMap((environment) => {
         const evidence = environment.providerEvidence;
         if (!evidence) return [];
-        const thermal = environment.thermal;
         const safety = result.safety.find(
           (item) => item.context.zoneId === environment.snapshot.zoneId,
         );
@@ -143,7 +126,9 @@ export function ThermalZoneMap({
             zoneId: environment.snapshot.zoneId,
             airTemperatureC: environment.snapshot.airTemperatureC,
             estimatedWbgtC:
-              thermal?.status === "VALID" ? thermal.estimatedWbgtC : null,
+              environment.thermal?.status === "VALID"
+                ? environment.thermal.estimatedWbgtC
+                : null,
             safetyDecision: safety?.result.decision ?? "INSUFFICIENT_DATA",
             geometry: evidence.fortyGuard.tileGeometry,
           },
@@ -153,170 +138,174 @@ export function ThermalZoneMap({
   }, [preview, result]);
 
   useEffect(() => {
-    selectedRef.current = selectedZoneId;
     const map = mapRef.current;
-    if (map?.getLayer("zones-fill"))
-      map.setPaintProperty("zones-fill", "fill-outline-color", [
-        "case",
-        ["==", ["get", "zoneId"], selectedZoneId ?? ""],
-        "#ffffff",
-        "#ffbd5c",
-      ]);
+    if (!map?.getLayer(OUTLINE_LAYER_ID)) return;
+    map.setPaintProperty(OUTLINE_LAYER_ID, "line-color", [
+      "case",
+      ["==", ["get", "zoneId"], selectedZoneId ?? ""],
+      "#ffffff",
+      "#ffd166",
+    ]);
+    map.setPaintProperty(OUTLINE_LAYER_ID, "line-width", [
+      "case",
+      ["==", ["get", "zoneId"], selectedZoneId ?? ""],
+      4,
+      2,
+    ]);
   }, [selectedZoneId]);
 
   useEffect(() => {
-    if (!containerRef.current || zones.length === 0) return;
-    setBasemapError(false);
+    const container = containerRef.current;
+    if (!container || zones.length === 0) return;
     setMapReady(false);
-    setFittedFeatureCount(0);
-    setGeometryError(undefined);
-    setZoneLayersReady(false);
-    const values = zones
-      .map((zone) => (preview ? zone.airTemperatureC : zone.estimatedWbgtC))
-      .filter((value): value is number => value !== null);
-    const minimum = Math.min(...values);
-    const maximum = Math.max(...values);
-    const collection: FeatureCollection<Polygon> = {
+    setMapError(undefined);
+    setSourceFeatureCount(0);
+    setRenderedFeatureCount(0);
+    setBasemapLayerCount(0);
+    const collection: FeatureCollection<AreaGeometry> = {
       type: "FeatureCollection",
       features: zones.map((zone) => ({
         type: "Feature",
         id: zone.zoneId,
         geometry: zone.geometry,
-        properties: {
-          zoneId: zone.zoneId,
-          fillColor: thermalColor(
-            preview ? zone.airTemperatureC : zone.estimatedWbgtC,
-            minimum,
-            maximum,
-          ),
-        },
+        properties: { zoneId: zone.zoneId },
       })),
     };
-    let completeBounds: [[number, number], [number, number]];
+    let bounds: [[number, number], [number, number]];
     try {
-      const bounds = featureCollectionBounds(collection);
-      if (!bounds) throw new Error("No polygon coordinates available.");
-      completeBounds = bounds;
+      const computed = featureCollectionBounds(collection);
+      if (!computed) throw new Error("No polygon coordinates available.");
+      bounds = computed;
     } catch (error) {
-      setGeometryError(
+      setMapError(
         error instanceof Error ? error.message : "Invalid polygon geometry.",
       );
       return;
     }
-    const first = zones[0]?.geometry.coordinates[0]?.[0];
-    if (!first) return;
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: BASEMAP_STYLE,
-      center: first as [number, number],
-      zoom: 14,
-      attributionControl: false,
-    });
-    mapRef.current = map;
-    map.addControl(new maplibregl.NavigationControl(), "top-left");
-    map.addControl(
-      new maplibregl.AttributionControl({ compact: false }),
-      "bottom-right",
-    );
-    const popup = new maplibregl.Popup({
-      closeButton: false,
-      closeOnClick: false,
-    });
-    const resizeObserver = new ResizeObserver(() => map.resize());
-    resizeObserver.observe(containerRef.current);
-    let fitFrame = 0;
-    let remoteStyleReady = false;
-    let usingFallback = false;
-    const activateFallback = () => {
-      if (remoteStyleReady || usingFallback) return;
-      usingFallback = true;
-      setBasemapError(true);
-      map.setStyle(FALLBACK_STYLE);
-    };
-    const styleTimeout = window.setTimeout(activateFallback, 10_000);
-    map.on("error", () => {
-      if (!remoteStyleReady) activateFallback();
-    });
-    map.on("style.load", () => {
-      if (!usingFallback) {
-        remoteStyleReady = true;
-        window.clearTimeout(styleTimeout);
-      }
-      if (!map.getSource("zones"))
-        map.addSource("zones", { type: "geojson", data: collection });
-      if (!map.getLayer("zones-fill"))
-        map.addLayer({
-          id: "zones-fill",
-          type: "fill",
-          source: "zones",
-          paint: {
-            "fill-color": ["get", "fillColor"],
-            "fill-opacity": usingFallback ? 0.82 : 0.66,
-            "fill-outline-color": [
-              "case",
-              ["==", ["get", "zoneId"], selectedRef.current ?? ""],
-              "#ffffff",
-              "#ffbd5c",
-            ],
+    let map: maplibregl.Map | undefined;
+    let popup: maplibregl.Popup | undefined;
+    let resizeObserver: ResizeObserver | undefined;
+    let layoutFrame = 0;
+    let diagnosticsTimer = 0;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(BASEMAP_STYLE);
+        if (!response.ok)
+          throw new Error(
+            `OpenFreeMap style request failed (${response.status}).`,
+          );
+        const style = (await response.json()) as StyleSpecification;
+        style.sources[SOURCE_ID] = { type: "geojson", data: collection };
+        style.layers.push(
+          {
+            id: FILL_LAYER_ID,
+            type: "fill",
+            source: SOURCE_ID,
+            paint: { "fill-color": "#ff8a00", "fill-opacity": 0.5 },
           },
-        });
-      if (!map.getLayer("zones-line"))
-        map.addLayer({
-          id: "zones-line",
-          type: "line",
-          source: "zones",
-          paint: {
-            "line-color": usingFallback ? "#ffe2a8" : "#ffffff",
-            "line-width": usingFallback ? 2.25 : 1.5,
+          {
+            id: OUTLINE_LAYER_ID,
+            type: "line",
+            source: SOURCE_ID,
+            paint: { "line-color": "#ffd166", "line-width": 2 },
           },
-        });
-      setZoneLayersReady(
-        Boolean(
-          map.getSource("zones") &&
-          map.getLayer("zones-fill") &&
-          map.getLayer("zones-line"),
-        ),
-      );
-      window.cancelAnimationFrame(fitFrame);
-      fitFrame = window.requestAnimationFrame(() => {
-        map.resize();
-        if (completeBounds)
-          map.fitBounds(completeBounds, {
-            padding: { top: 44, right: 44, bottom: 44, left: 44 },
-            maxZoom: 17,
-            duration: 0,
-          });
-        setFittedFeatureCount(collection.features.length);
-        setMapReady(true);
-      });
-      map.on("mouseenter", "zones-fill", (event) => {
-        map.getCanvas().style.cursor = "pointer";
-        const feature = event.features?.[0];
-        const zone = zones.find(
-          (item) => item.zoneId === feature?.properties.zoneId,
         );
-        if (zone)
-          popup.setLngLat(event.lngLat).setDOMContent(tooltip(zone)).addTo(map);
-      });
-      map.on("mousemove", "zones-fill", (event) =>
-        popup.setLngLat(event.lngLat),
-      );
-      map.on("mouseleave", "zones-fill", () => {
-        map.getCanvas().style.cursor = "";
-        popup.remove();
-      });
-      map.on("click", "zones-fill", (event) => {
-        const zoneId = event.features?.[0]?.properties.zoneId as
-          string | undefined;
-        if (zoneId) onSelectZone(zoneId);
-      });
-    });
+        if (cancelled) return;
+        map = new maplibregl.Map({
+          container,
+          style,
+          bounds,
+          fitBoundsOptions: { padding: 50, maxZoom: 18, duration: 0 },
+          attributionControl: false,
+        });
+        mapRef.current = map;
+        map.on("error", (event) =>
+          setMapError(
+            event.error instanceof Error
+              ? event.error.message
+              : "MapLibre resource failed to load.",
+          ),
+        );
+        map.addControl(new maplibregl.NavigationControl(), "top-left");
+        map.addControl(
+          new maplibregl.AttributionControl({ compact: false }),
+          "bottom-right",
+        );
+        popup = new maplibregl.Popup({
+          closeButton: false,
+          closeOnClick: false,
+        });
+        resizeObserver = new ResizeObserver(() => map?.resize());
+        resizeObserver.observe(container);
+        map.on("mouseenter", FILL_LAYER_ID, (event) => {
+          map!.getCanvas().style.cursor = "pointer";
+          const zone = zones.find(
+            (item) => item.zoneId === event.features?.[0]?.properties.zoneId,
+          );
+          if (zone)
+            popup!
+              .setLngLat(event.lngLat)
+              .setDOMContent(tooltip(zone))
+              .addTo(map!);
+        });
+        map.on("mousemove", FILL_LAYER_ID, (event) =>
+          popup!.setLngLat(event.lngLat),
+        );
+        map.on("mouseleave", FILL_LAYER_ID, () => {
+          map!.getCanvas().style.cursor = "";
+          popup!.remove();
+        });
+        map.on("click", FILL_LAYER_ID, (event) => {
+          const zoneId = event.features?.[0]?.properties.zoneId as
+            string | undefined;
+          if (zoneId) onSelectZone(zoneId);
+        });
+        const assessRenderedMap = () => {
+          const sourceCount = map!.querySourceFeatures(SOURCE_ID).length;
+          const renderedFeatures = map!.queryRenderedFeatures();
+          const renderedCount = renderedFeatures.filter(
+            (feature) => feature.layer.id === FILL_LAYER_ID,
+          ).length;
+          const baseCount = renderedFeatures.filter(
+            (feature) =>
+              feature.layer.id !== FILL_LAYER_ID &&
+              feature.layer.id !== OUTLINE_LAYER_ID,
+          ).length;
+          setSourceFeatureCount(sourceCount);
+          setRenderedFeatureCount(renderedCount);
+          setBasemapLayerCount(baseCount);
+          if (sourceCount > 0 && renderedCount > 0 && baseCount > 0) {
+            setMapReady(true);
+            map!.off("render", assessRenderedMap);
+            window.clearInterval(diagnosticsTimer);
+          }
+        };
+        map.on("render", assessRenderedMap);
+        diagnosticsTimer = window.setInterval(assessRenderedMap, 250);
+        layoutFrame = window.requestAnimationFrame(() => {
+          layoutFrame = window.requestAnimationFrame(() => {
+            map!.resize();
+            map!.fitBounds(bounds, { padding: 50, maxZoom: 18, duration: 0 });
+            map!.triggerRepaint();
+          });
+        });
+      } catch (error) {
+        if (!cancelled)
+          setMapError(
+            error instanceof Error
+              ? error.message
+              : "OpenFreeMap failed to load.",
+          );
+      }
+    })();
     return () => {
-      window.clearTimeout(styleTimeout);
-      window.cancelAnimationFrame(fitFrame);
-      resizeObserver.disconnect();
-      popup.remove();
-      map.remove();
+      cancelled = true;
+      window.cancelAnimationFrame(layoutFrame);
+      window.clearInterval(diagnosticsTimer);
+      resizeObserver?.disconnect();
+      popup?.remove();
+      map?.remove();
       mapRef.current = undefined;
     };
   }, [onSelectZone, zones]);
@@ -331,12 +320,6 @@ export function ThermalZoneMap({
     return (
       <div className="map-state error" role="status">
         No verified zone geometry is available for this result.
-      </div>
-    );
-  if (geometryError)
-    return (
-      <div className="map-state error" role="status">
-        Invalid verified zone geometry: {geometryError}
       </div>
     );
   return (
@@ -362,17 +345,21 @@ export function ThermalZoneMap({
           aria-label="Interactive thermal zone map"
           aria-busy={!mapReady}
           data-ready={mapReady}
-          data-feature-count={zones.length}
-          data-fit-feature-count={fittedFeatureCount}
-          data-zone-source-ready={zoneLayersReady}
-          data-zone-fill-ready={zoneLayersReady}
-          data-zone-line-ready={zoneLayersReady}
-          data-basemap-mode={basemapError ? "fallback" : "remote"}
+          data-input-feature-count={zones.length}
+          data-source-feature-count={sourceFeatureCount}
+          data-rendered-feature-count={renderedFeatureCount}
+          data-basemap-layer-count={basemapLayerCount}
+          data-source-exists={Boolean(mapRef.current?.getSource(SOURCE_ID))}
+          data-fill-layer-exists={Boolean(
+            mapRef.current?.getLayer(FILL_LAYER_ID),
+          )}
+          data-outline-layer-exists={Boolean(
+            mapRef.current?.getLayer(OUTLINE_LAYER_ID),
+          )}
         />
-        {basemapError && (
-          <div className="basemap-warning" role="status">
-            Basemap unavailable. Verified zone geometry and evidence remain
-            active.
+        {mapError && (
+          <div className="basemap-warning" role="alert">
+            Map unavailable: {mapError}
           </div>
         )}
       </div>
@@ -380,10 +367,10 @@ export function ThermalZoneMap({
         <i />
         <span>
           {preview
-            ? "Relative thermal color · FortyGuard air temperature"
-            : "Relative thermal color · backend Estimated Outdoor WBGT"}
+            ? "FortyGuard air-temperature tile coverage"
+            : "Verified planning-zone coverage"}
         </span>
-        <span>Click a zone for evidence</span>
+        <span>Click a tile for evidence</span>
       </div>
     </div>
   );

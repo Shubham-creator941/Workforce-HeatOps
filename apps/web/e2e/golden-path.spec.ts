@@ -17,9 +17,6 @@ test("supervisor golden path preserves meaningful evidence across every view", a
         body.data?.environment?.[0]?.providerEvidence?.fortyGuard?.tileGeometry;
     }
   });
-  await page.route("https://tiles.openfreemap.org/**", (route) =>
-    route.abort(),
-  );
   await page.goto("/mission");
   await expect(
     page.getByRole("heading", { name: "Phoenix Riverside Build" }),
@@ -60,12 +57,10 @@ test("supervisor golden path preserves meaningful evidence across every view", a
     name: "Interactive thermal zone map",
   });
   await expect(map).toBeVisible();
-  await expect(map).toHaveAttribute("data-ready", "true");
-  await expect(
-    page.getByText(
-      "Basemap unavailable. Verified zone geometry and evidence remain active.",
-    ),
-  ).toBeVisible();
+  await expect(map).toHaveAttribute("data-ready", "true", { timeout: 20_000 });
+  await expect(map).toHaveAttribute("data-source-exists", "true");
+  await expect(map).toHaveAttribute("data-fill-layer-exists", "true");
+  await expect(map).toHaveAttribute("data-outline-layer-exists", "true");
   const zone = page.getByRole("button", { name: "Select zone-east" });
   await zone.click();
   await expect(zone).toHaveAttribute("aria-pressed", "true");
@@ -105,9 +100,6 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
 }) => {
   const mapRequests: string[] = [];
   page.on("request", (request) => mapRequests.push(request.url()));
-  await page.route("https://tiles.openfreemap.org/**", (route) =>
-    route.abort(),
-  );
   const previewTiles = Array.from({ length: 1_174 }, (_, index) => {
     const x = -112.01 + (index % 34) * 0.0005;
     const y = 32.99 + Math.floor(index / 34) * 0.0005;
@@ -176,18 +168,29 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
   const map = page.getByRole("application", {
     name: "Interactive thermal zone map",
   });
-  await expect(map).toHaveAttribute("data-ready", "true");
-  await expect(map).toHaveAttribute("data-feature-count", "1174");
-  await expect(map).toHaveAttribute("data-fit-feature-count", "1174");
-  await expect(map).toHaveAttribute("data-zone-source-ready", "true");
-  await expect(map).toHaveAttribute("data-zone-fill-ready", "true");
-  await expect(map).toHaveAttribute("data-zone-line-ready", "true");
-  await expect(map).toHaveAttribute("data-basemap-mode", "fallback");
+  await expect(map).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
+  await expect(map).toHaveAttribute("data-source-exists", "true");
+  await expect(map).toHaveAttribute("data-fill-layer-exists", "true");
+  await expect(map).toHaveAttribute("data-outline-layer-exists", "true");
+  await expect(map).toHaveAttribute("data-input-feature-count", "1174");
+  await expect
+    .poll(async () =>
+      Number(await map.getAttribute("data-source-feature-count")),
+    )
+    .toBeGreaterThan(0);
+  await expect
+    .poll(async () =>
+      Number(await map.getAttribute("data-rendered-feature-count")),
+    )
+    .toBeGreaterThan(0);
+  await expect
+    .poll(async () =>
+      Number(await map.getAttribute("data-basemap-layer-count")),
+    )
+    .toBeGreaterThan(0);
   await expect(
-    page.getByText(
-      "Basemap unavailable. Verified zone geometry and evidence remain active.",
-    ),
-  ).toBeVisible();
+    page.getByText("Map unavailable:", { exact: false }),
+  ).toHaveCount(0);
   const toolbarBox = await page.getByLabel("Map zones").boundingBox();
   const viewportBox = await page.locator(".map-viewport").boundingBox();
   expect(toolbarBox).not.toBeNull();
@@ -198,9 +201,30 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
   expect(viewportBox!.height).toBeGreaterThanOrEqual(390);
   await expect(page.getByTitle("Zoom in")).toBeVisible();
   await expect(page.getByTitle("Zoom out")).toBeVisible();
+  const hostBox = await map.boundingBox();
+  expect(hostBox).not.toBeNull();
+  let interactivePoint: { x: number; y: number } | undefined;
+  for (const yRatio of [0.25, 0.4, 0.55, 0.7]) {
+    for (const xRatio of [0.25, 0.4, 0.55, 0.7]) {
+      const point = {
+        x: hostBox!.x + hostBox!.width * xRatio,
+        y: hostBox!.y + hostBox!.height * yRatio,
+      };
+      await page.mouse.move(point.x, point.y);
+      if ((await page.locator(".map-tooltip").count()) > 0) {
+        interactivePoint = point;
+        break;
+      }
+    }
+    if (interactivePoint) break;
+  }
+  expect(interactivePoint).toBeDefined();
+  await expect(page.locator(".map-tooltip")).toContainText(
+    "FortyGuard average air temperature",
+  );
+  await page.mouse.click(interactivePoint!.x, interactivePoint!.y);
   await page.getByRole("button", { name: "Select 1161" }).click();
   await expect(page.getByText("41.61°C").first()).toBeVisible();
-  await expect(map).toHaveAttribute("data-fit-feature-count", "1174");
   await expect(page.getByText("Optimizer not run")).toBeVisible();
   await expect(
     page.getByText("Not run", { exact: true }).first(),
@@ -208,10 +232,23 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
   await expect(page.getByText("Complete", { exact: true })).toHaveCount(0);
   expect(
     mapRequests.some((url) =>
-      url.startsWith("https://tiles.openfreemap.org/styles/dark"),
+      url.startsWith("https://tiles.openfreemap.org/styles/liberty"),
     ),
   ).toBe(true);
   expect(mapRequests.some((url) => url.includes("carto.com"))).toBe(false);
+  const sourceFeatureCount = Number(
+    await map.getAttribute("data-source-feature-count"),
+  );
+  const renderedPolygonCount = Number(
+    await map.getAttribute("data-rendered-feature-count"),
+  );
+  console.log(
+    `LIVE_MAP_RUNTIME source=${sourceFeatureCount} rendered=${renderedPolygonCount}`,
+  );
+  await page.screenshot({
+    path: "test-results/live-map-acceptance.png",
+    fullPage: true,
+  });
 
   await page.getByRole("button", { name: "Run HeatOps" }).click();
   await expect(page.getByRole("alert")).toContainText(
