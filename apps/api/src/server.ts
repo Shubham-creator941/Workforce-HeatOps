@@ -14,6 +14,13 @@ import { createOpenAiPlanningExplainer } from "./planning/explanation.js";
 const config = loadConfig();
 const prisma = new PrismaClient();
 const database = createDatabaseHealth(prisma);
+const fortyGuard = createFortyGuardClient({
+  ...(config.FORTYGUARD_API_KEY ? { apiKey: config.FORTYGUARD_API_KEY } : {}),
+  baseUrl: config.FORTYGUARD_BASE_URL,
+  timeoutMs: config.PROVIDER_TIMEOUT_MS,
+  pollAttempts: config.FORTYGUARD_POLL_ATTEMPTS,
+  pollIntervalMs: config.FORTYGUARD_POLL_INTERVAL_MS,
+});
 const server = createServer(
   createApp(
     config,
@@ -23,15 +30,7 @@ const server = createServer(
       createPrismaPlanningRunStore(prisma),
       createPlanningDecisionEngine(config.DECISION_ENGINE_BASE_URL),
       {
-        fortyGuard: createFortyGuardClient({
-          ...(config.FORTYGUARD_API_KEY
-            ? { apiKey: config.FORTYGUARD_API_KEY }
-            : {}),
-          baseUrl: config.FORTYGUARD_BASE_URL,
-          timeoutMs: config.PROVIDER_TIMEOUT_MS,
-          pollAttempts: config.FORTYGUARD_POLL_ATTEMPTS,
-          pollIntervalMs: config.FORTYGUARD_POLL_INTERVAL_MS,
-        }),
+        fortyGuard,
         meteorology: createOpenMeteoClient({
           baseUrl: config.OPEN_METEO_BASE_URL,
           timeoutMs: config.PROVIDER_TIMEOUT_MS,
@@ -43,6 +42,7 @@ const server = createServer(
       model: config.OPENAI_EXPLANATION_MODEL,
       baseUrl: config.OPENAI_BASE_URL,
     }),
+    fortyGuard,
   ),
 );
 

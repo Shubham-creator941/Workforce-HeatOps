@@ -34,6 +34,8 @@ import {
   PlanningExplanationSchema,
   PlanningRunSchema,
   SupervisorPlanningResultSchema,
+  FortyGuardPreviewResultSchema,
+  type FortyGuardPreviewResult,
   type PlanningExplanation,
   type PlanningRequest,
   type SupervisorPlanningResult,
@@ -50,6 +52,11 @@ type LiveProviderInputs = {
   observedAt: string;
   sourceRef: string;
 };
+type PreviewState =
+  | { kind: "idle" }
+  | { kind: "submitting" | "processing" | "rendering" }
+  | { kind: "ready"; result: FortyGuardPreviewResult }
+  | { kind: "error"; message: string; code?: string };
 type Context = {
   state: RunState;
   run: (
@@ -325,6 +332,7 @@ function Mission({ context }: { context: Context }) {
     };
   });
   const [selectedZoneId, setSelectedZoneId] = useState<string>();
+  const [preview, setPreview] = useState<PreviewState>({ kind: "idle" });
   const { result, state } = context;
   const activeZoneId =
     selectedZoneId ?? result?.environment[0]?.snapshot.zoneId;
@@ -334,6 +342,51 @@ function Mission({ context }: { context: Context }) {
   const safety = result?.safety.find(
     (item) => item.context.zoneId === activeZoneId,
   );
+  const previewResult = preview.kind === "ready" ? preview.result : undefined;
+  const selectedPreviewTile =
+    previewResult?.tiles.find((tile) => tile.tileId === activeZoneId) ??
+    previewResult?.tiles[0];
+  async function previewFortyGuard() {
+    setPreview({ kind: "submitting" });
+    try {
+      const end = new Date(liveInputs.observedAt);
+      if (!Number.isFinite(end.valueOf()))
+        throw Object.assign(new Error("Enter a valid preview time."), {
+          code: "PREVIEW_TIME_INVALID",
+        });
+      setPreview({ kind: "processing" });
+      const parsed = FortyGuardPreviewResultSchema.parse(
+        await api("/api/v1/provider-previews/fortyguard", {
+          method: "POST",
+          body: JSON.stringify({
+            polygon: [
+              [-112.01, 32.99],
+              [-111.99, 32.99],
+              [-111.99, 33.01],
+              [-112.01, 33.01],
+              [-112.01, 32.99],
+            ],
+            samplePoint: [-112, 33],
+            intervalStartUtc: new Date(end.valueOf() - 3_600_000).toISOString(),
+            intervalEndUtc: end.toISOString(),
+            timeZone: "America/Phoenix",
+          }),
+        }),
+      );
+      setPreview({ kind: "rendering" });
+      requestAnimationFrame(() => {
+        setSelectedZoneId(parsed.tiles[0]?.tileId);
+        setPreview({ kind: "ready", result: parsed });
+      });
+    } catch (error) {
+      const failure = error as Error & { code?: string };
+      setPreview({
+        kind: "error",
+        message: failure.message,
+        ...(failure.code ? { code: failure.code } : {}),
+      });
+    }
+  }
   const selectZone = useCallback((zoneId: string) => {
     setSelectedZoneId(zoneId);
   }, []);
@@ -437,6 +490,45 @@ function Mission({ context }: { context: Context }) {
               placeholder="Required observation ID"
             />
           </label>
+          <button
+            className="outline"
+            type="button"
+            disabled={
+              preview.kind === "submitting" || preview.kind === "processing"
+            }
+            onClick={() => void previewFortyGuard()}
+          >
+            <MapPinned /> Preview Live FortyGuard
+          </button>
+        </section>
+      )}
+      {scenario === "live" && preview.kind !== "idle" && (
+        <section className="preview-status card" aria-live="polite">
+          <div>
+            <b>Live FortyGuard Thermal Preview</b>
+            <span>
+              {preview.kind === "error" ? "Provider Error" : preview.kind}
+            </span>
+          </div>
+          {preview.kind === "ready" && (
+            <>
+              <span>Activity {preview.result.activityId}</span>
+              <span>{preview.result.tiles.length} tile(s) · 60 m TCM</span>
+              <span>
+                {preview.result.submittedStartDate}{" "}
+                {preview.result.submittedStartTime} ·{" "}
+                {preview.result.submittedTimeZone}
+              </span>
+            </>
+          )}
+          {preview.kind === "error" && (
+            <span className="preview-error">
+              {preview.code ?? "FORTYGUARD_PREVIEW_ERROR"}: {preview.message}
+            </span>
+          )}
+          <strong>
+            WBGT / Safety unavailable until verified exact-2m wind is supplied
+          </strong>
         </section>
       )}
       {state.kind === "error" && (
@@ -482,7 +574,15 @@ function Mission({ context }: { context: Context }) {
           </div>
           <ThermalZoneMap
             result={result}
-            loading={state.kind === "loading"}
+            {...(scenario === "live" && previewResult
+              ? { preview: previewResult }
+              : {})}
+            loading={
+              state.kind === "loading" ||
+              preview.kind === "submitting" ||
+              preview.kind === "processing" ||
+              preview.kind === "rendering"
+            }
             selectedZoneId={activeZoneId}
             onSelectZone={selectZone}
           />
@@ -495,7 +595,35 @@ function Mission({ context }: { context: Context }) {
                 {activeZoneId ? name(activeZoneId) : "Deterministic"}
               </small>
             </div>
-            {safety ? (
+            {scenario === "live" && selectedPreviewTile ? (
+              <>
+                <span className="decision warn">Thermal preview only</span>
+                <dl>
+                  <div>
+                    <dt>Tile ID</dt>
+                    <dd>{selectedPreviewTile.tileId}</dd>
+                  </div>
+                  <div>
+                    <dt>Average air temperature</dt>
+                    <dd>
+                      {selectedPreviewTile.averageTemperatureC.toFixed(2)}°C
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Minimum</dt>
+                    <dd>{selectedPreviewTile.minTemperatureC.toFixed(2)}°C</dd>
+                  </div>
+                  <div>
+                    <dt>Maximum</dt>
+                    <dd>{selectedPreviewTile.maxTemperatureC.toFixed(2)}°C</dd>
+                  </div>
+                </dl>
+                <p>
+                  WBGT / Safety unavailable until verified exact-2m wind is
+                  supplied.
+                </p>
+              </>
+            ) : safety ? (
               <>
                 <span
                   className={

@@ -39,6 +39,47 @@ export const GeoJsonPolygonSchema = z
     coordinates: z.array(z.array(CoordinateSchema).min(4)).min(1),
   })
   .strict();
+export const FortyGuardPreviewRequestSchema = z
+  .object({
+    polygon: z.array(CoordinateSchema).min(4).max(500),
+    samplePoint: CoordinateSchema,
+    intervalStartUtc: z.iso.datetime({ offset: true }),
+    intervalEndUtc: z.iso.datetime({ offset: true }),
+    timeZone: z.string().min(1).max(128),
+  })
+  .strict();
+export const FortyGuardPreviewResultSchema = z
+  .object({
+    provider: z.literal("FORTYGUARD_TEMPERATURE_API_V1"),
+    previewType: z.literal("LIVE_FORTYGUARD_THERMAL_PREVIEW"),
+    activityId: Id,
+    granularityM: z.literal(60),
+    submittedStartDate: z.string(),
+    submittedStartTime: z.string(),
+    submittedTimeZone: z.string(),
+    alignedIntervalStart: z.iso.datetime({ offset: true }),
+    alignedIntervalEnd: z.iso.datetime({ offset: true }),
+    tiles: z
+      .array(
+        z
+          .object({
+            tileId: Id,
+            geometry: GeoJsonPolygonSchema,
+            averageTemperatureC: Finite,
+            minTemperatureC: Finite,
+            maxTemperatureC: Finite,
+          })
+          .strict(),
+      )
+      .min(1),
+  })
+  .strict();
+export type FortyGuardPreviewRequest = z.infer<
+  typeof FortyGuardPreviewRequestSchema
+>;
+export type FortyGuardPreviewResult = z.infer<
+  typeof FortyGuardPreviewResultSchema
+>;
 const ProviderEnvironmentalSourceSchema = z
   .object({
     mode: z.literal("PROVIDERS"),

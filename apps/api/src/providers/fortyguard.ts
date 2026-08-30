@@ -29,6 +29,21 @@ export interface FortyGuardClient {
   temperature(
     request: FortyGuardTemperatureRequest,
   ): Promise<FortyGuardTemperature>;
+  preview(request: FortyGuardTemperatureRequest): Promise<{
+    activityId: string;
+    submittedStartDate: string;
+    submittedStartTime: string;
+    submittedTimeZone: string;
+    alignedIntervalStart: string;
+    alignedIntervalEnd: string;
+    tiles: Array<{
+      tileId: string;
+      averageTemperatureC: number;
+      minTemperatureC: number;
+      maxTemperatureC: number;
+      geometry: { type: "Polygon"; coordinates: Coordinate[][] };
+    }>;
+  }>;
 }
 
 const SubmittedSchema = z
@@ -201,105 +216,137 @@ export function createFortyGuardClient(options: {
       throw new ProviderError("FORTYGUARD", "INVALID_RESPONSE");
     }
   }
-  return {
-    async temperature(input) {
-      const start = new Date(input.intervalStartUtc);
-      const end = new Date(input.intervalEndUtc);
-      if (
-        !Number.isFinite(start.valueOf()) ||
-        !Number.isFinite(end.valueOf()) ||
-        end.valueOf() - start.valueOf() !== 3_600_000
-      )
-        throw new ProviderError("FORTYGUARD", "TEMPORAL_ALIGNMENT");
-      if (
-        start < new Date("2019-01-01T00:00:00Z") ||
-        end.valueOf() > now().valueOf() + 12 * 3_600_000
-      )
-        throw new ProviderError("FORTYGUARD", "INVALID_REQUEST");
-      let submitted: { date: string; time: string };
-      try {
-        submitted = localParts(start, input.timeZone);
-      } catch (error) {
-        if (error instanceof ProviderError) throw error;
-        throw new ProviderError("FORTYGUARD", "TEMPORAL_ALIGNMENT");
-      }
-      const submission = SubmittedSchema.safeParse(
-        await request("/v1/heatmap", {
-          method: "POST",
-          body: JSON.stringify({
-            polygon_aoi: {
-              type: "FeatureCollection",
-              features: [
-                {
-                  type: "Feature",
-                  properties: {},
-                  geometry: { type: "Polygon", coordinates: [input.polygon] },
-                },
-              ],
-            },
-            date_time: {
-              start_date: submitted.date,
-              start_time: submitted.time,
-              filter_type: 1,
-            },
-            granularity: 60,
-            analytic_type: "tcm",
-          }),
+  async function heatmap(input: FortyGuardTemperatureRequest) {
+    const start = new Date(input.intervalStartUtc);
+    const end = new Date(input.intervalEndUtc);
+    if (
+      !Number.isFinite(start.valueOf()) ||
+      !Number.isFinite(end.valueOf()) ||
+      end.valueOf() - start.valueOf() !== 3_600_000
+    )
+      throw new ProviderError("FORTYGUARD", "TEMPORAL_ALIGNMENT");
+    if (
+      start < new Date("2019-01-01T00:00:00Z") ||
+      end.valueOf() > now().valueOf() + 12 * 3_600_000
+    )
+      throw new ProviderError("FORTYGUARD", "INVALID_REQUEST");
+    let submitted: { date: string; time: string };
+    try {
+      submitted = localParts(start, input.timeZone);
+    } catch (error) {
+      if (error instanceof ProviderError) throw error;
+      throw new ProviderError("FORTYGUARD", "TEMPORAL_ALIGNMENT");
+    }
+    const submission = SubmittedSchema.safeParse(
+      await request("/v1/heatmap", {
+        method: "POST",
+        body: JSON.stringify({
+          polygon_aoi: {
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                properties: {},
+                geometry: { type: "Polygon", coordinates: [input.polygon] },
+              },
+            ],
+          },
+          date_time: {
+            start_date: submitted.date,
+            start_time: submitted.time,
+            filter_type: 1,
+          },
+          granularity: 60,
+          analytic_type: "tcm",
         }),
+      }),
+    );
+    if (!submission.success)
+      throw new ProviderError("FORTYGUARD", "INVALID_RESPONSE");
+    const activityId = submission.data.data.activity_id;
+    for (let attempt = 0; attempt < pollAttempts; attempt += 1) {
+      if (attempt > 0) await sleep(pollIntervalMs);
+      const statusResponse = await request(
+        `/v1/status/${encodeURIComponent(activityId)}`,
+        { method: "GET" },
+        true,
       );
-      if (!submission.success)
+      if (statusResponse === null) continue;
+      const parsed = StatusSchema.safeParse(statusResponse);
+      if (!parsed.success || parsed.data.data.activity_id !== activityId)
         throw new ProviderError("FORTYGUARD", "INVALID_RESPONSE");
-      const activityId = submission.data.data.activity_id;
-      for (let attempt = 0; attempt < pollAttempts; attempt += 1) {
-        if (attempt > 0) await sleep(pollIntervalMs);
-        const statusResponse = await request(
-          `/v1/status/${encodeURIComponent(activityId)}`,
-          { method: "GET" },
-          true,
-        );
-        if (statusResponse === null) continue;
-        const parsed = StatusSchema.safeParse(statusResponse);
-        if (!parsed.success || parsed.data.data.activity_id !== activityId)
-          throw new ProviderError("FORTYGUARD", "INVALID_RESPONSE");
-        const status = parsed.data.data.status.toLowerCase();
-        if (status === "failed" || status === "error")
-          throw new ProviderError("FORTYGUARD", "UPSTREAM");
-        if (status !== "completed" && status !== "succeeded") continue;
-        const features = parsed.data.data.result?.map_data.features;
-        if (!features)
-          throw new ProviderError("FORTYGUARD", "INVALID_RESPONSE");
-        const matches = features.filter((feature) => {
-          const [outer, ...holes] = feature.geometry.coordinates;
-          return (
-            contains(outer ?? [], input.samplePoint) &&
-            !holes.some((hole) => contains(hole, input.samplePoint))
-          );
-        });
-        if (matches.length !== 1)
-          throw new ProviderError("FORTYGUARD", "MISSING_DATA");
-        const match = matches[0];
-        const properties = match?.properties;
+      const status = parsed.data.data.status.toLowerCase();
+      if (status === "failed" || status === "error")
+        throw new ProviderError("FORTYGUARD", "UPSTREAM");
+      if (status !== "completed" && status !== "succeeded") continue;
+      const features = parsed.data.data.result?.map_data.features;
+      if (!features) throw new ProviderError("FORTYGUARD", "INVALID_RESPONSE");
+      for (const feature of features) {
+        const properties = feature.properties;
         if (
-          !properties ||
           properties.min_temperature > properties.average_temperature ||
           properties.average_temperature > properties.max_temperature
         )
           throw new ProviderError("FORTYGUARD", "INVALID_RESPONSE");
-        return {
-          activityId,
-          tileId: String(properties.tile_id),
-          averageTemperatureC: properties.average_temperature,
-          minTemperatureC: properties.min_temperature,
-          maxTemperatureC: properties.max_temperature,
-          submittedStartDate: submitted.date,
-          submittedStartTime: submitted.time,
-          submittedTimeZone: input.timeZone,
-          alignedIntervalStart: start.toISOString(),
-          alignedIntervalEnd: end.toISOString(),
-          tileGeometry: match.geometry,
-        };
       }
-      throw new ProviderError("FORTYGUARD", "TIMEOUT");
+      return {
+        activityId,
+        submittedStartDate: submitted.date,
+        submittedStartTime: submitted.time,
+        submittedTimeZone: input.timeZone,
+        alignedIntervalStart: start.toISOString(),
+        alignedIntervalEnd: end.toISOString(),
+        features,
+      };
+    }
+    throw new ProviderError("FORTYGUARD", "TIMEOUT");
+  }
+  return {
+    async temperature(input) {
+      const result = await heatmap(input);
+      const matches = result.features.filter((feature) => {
+        const [outer, ...holes] = feature.geometry.coordinates;
+        return (
+          contains(outer ?? [], input.samplePoint) &&
+          !holes.some((hole) => contains(hole, input.samplePoint))
+        );
+      });
+      if (matches.length !== 1)
+        throw new ProviderError("FORTYGUARD", "MISSING_DATA");
+      const match = matches[0];
+      const properties = match?.properties;
+      if (
+        !properties ||
+        properties.min_temperature > properties.average_temperature ||
+        properties.average_temperature > properties.max_temperature
+      )
+        throw new ProviderError("FORTYGUARD", "INVALID_RESPONSE");
+      return {
+        activityId: result.activityId,
+        tileId: String(properties.tile_id),
+        averageTemperatureC: properties.average_temperature,
+        minTemperatureC: properties.min_temperature,
+        maxTemperatureC: properties.max_temperature,
+        submittedStartDate: result.submittedStartDate,
+        submittedStartTime: result.submittedStartTime,
+        submittedTimeZone: result.submittedTimeZone,
+        alignedIntervalStart: result.alignedIntervalStart,
+        alignedIntervalEnd: result.alignedIntervalEnd,
+        tileGeometry: match.geometry,
+      };
+    },
+    async preview(input) {
+      const { features, ...result } = await heatmap(input);
+      return {
+        ...result,
+        tiles: features.map((feature) => ({
+          tileId: String(feature.properties.tile_id),
+          averageTemperatureC: feature.properties.average_temperature,
+          minTemperatureC: feature.properties.min_temperature,
+          maxTemperatureC: feature.properties.max_temperature,
+          geometry: feature.geometry,
+        })),
+      };
     },
   };
 }

@@ -22,7 +22,7 @@ import type { FortyGuardClient } from "../providers/fortyguard.js";
 import type { MeteorologyClient } from "../providers/open-meteo.js";
 
 export interface PlanningProviders {
-  fortyGuard: FortyGuardClient;
+  fortyGuard: Pick<FortyGuardClient, "temperature">;
   meteorology: MeteorologyClient;
 }
 

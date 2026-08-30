@@ -12,6 +12,8 @@ import { healthRouter } from "./routes/health.js";
 import { planningRouter } from "./routes/planning.js";
 import type { PlanningService } from "./planning/service.js";
 import type { PlanningExplainer } from "./planning/explanation.js";
+import type { FortyGuardClient } from "./providers/fortyguard.js";
+import { providerPreviewRouter } from "./routes/provider-preview.js";
 
 export function createApp(
   config: Pick<Config, "CORS_ORIGIN" | "LOG_LEVEL"> & Partial<Config>,
@@ -19,6 +21,7 @@ export function createApp(
   decisionEngine: DecisionEngineHealth,
   planning?: PlanningService,
   explainer?: PlanningExplainer,
+  fortyGuard?: FortyGuardClient,
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -30,6 +33,8 @@ export function createApp(
   app.use("/api/v1/health", healthRouter(database, decisionEngine));
   if (planning)
     app.use("/api/v1/planning-runs", planningRouter(planning, explainer));
+  if (fortyGuard)
+    app.use("/api/v1/provider-previews", providerPreviewRouter(fortyGuard));
   app.use((_request, response) =>
     response
       .status(404)

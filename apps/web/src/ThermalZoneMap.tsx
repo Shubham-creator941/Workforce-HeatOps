@@ -3,7 +3,10 @@ import * as maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import type { FeatureCollection, Polygon } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { SupervisorPlanningResult } from "@heatops/contracts";
+import type {
+  FortyGuardPreviewResult,
+  SupervisorPlanningResult,
+} from "@heatops/contracts";
 
 const BASEMAP_STYLE: StyleSpecification = {
   version: 8,
@@ -62,11 +65,13 @@ function tooltip(zone: Zone): HTMLDivElement {
 
 export function ThermalZoneMap({
   result,
+  preview,
   loading,
   selectedZoneId,
   onSelectZone,
 }: {
   result: SupervisorPlanningResult | undefined;
+  preview?: FortyGuardPreviewResult;
   loading: boolean;
   selectedZoneId: string | undefined;
   onSelectZone: (zoneId: string) => void;
@@ -76,8 +81,16 @@ export function ThermalZoneMap({
   const selectedRef = useRef<string | undefined>(undefined);
   const [basemapError, setBasemapError] = useState(false);
   const [mapReady, setMapReady] = useState(false);
-  const zones = useMemo<Zone[]>(
-    () =>
+  const zones = useMemo<Zone[]>(() => {
+    if (preview)
+      return preview.tiles.map((tile) => ({
+        zoneId: tile.tileId,
+        airTemperatureC: tile.averageTemperatureC,
+        estimatedWbgtC: null,
+        safetyDecision: "UNAVAILABLE_WITHOUT_VERIFIED_2M_WIND",
+        geometry: tile.geometry,
+      }));
+    return (
       result?.environment.flatMap((environment) => {
         const evidence = environment.providerEvidence;
         if (!evidence) return [];
@@ -95,9 +108,9 @@ export function ThermalZoneMap({
             geometry: evidence.fortyGuard.tileGeometry,
           },
         ];
-      }) ?? [],
-    [result],
-  );
+      }) ?? []
+    );
+  }, [preview, result]);
 
   useEffect(() => {
     selectedRef.current = selectedZoneId;
@@ -115,9 +128,9 @@ export function ThermalZoneMap({
     if (!containerRef.current || zones.length === 0) return;
     setBasemapError(false);
     setMapReady(false);
-    const values = zones.flatMap((zone) =>
-      zone.estimatedWbgtC === null ? [] : [zone.estimatedWbgtC],
-    );
+    const values = zones
+      .map((zone) => (preview ? zone.airTemperatureC : zone.estimatedWbgtC))
+      .filter((value): value is number => value !== null);
     const minimum = Math.min(...values);
     const maximum = Math.max(...values);
     const collection: FeatureCollection<Polygon> = {
@@ -128,7 +141,11 @@ export function ThermalZoneMap({
         geometry: zone.geometry,
         properties: {
           zoneId: zone.zoneId,
-          fillColor: thermalColor(zone.estimatedWbgtC, minimum, maximum),
+          fillColor: thermalColor(
+            preview ? zone.airTemperatureC : zone.estimatedWbgtC,
+            minimum,
+            maximum,
+          ),
         },
       })),
     };
@@ -217,7 +234,7 @@ export function ThermalZoneMap({
 
   if (loading)
     return <div className="map-state">Loading verified zone geometry…</div>;
-  if (!result)
+  if (!result && !preview)
     return (
       <div className="map-state">Run HeatOps to load the thermal map.</div>
     );
@@ -258,7 +275,11 @@ export function ThermalZoneMap({
       </div>
       <div className="map-legend">
         <i />
-        <span>Relative thermal color · backend Estimated Outdoor WBGT</span>
+        <span>
+          {preview
+            ? "Relative thermal color · FortyGuard air temperature"
+            : "Relative thermal color · backend Estimated Outdoor WBGT"}
+        </span>
         <span>Click a zone for evidence</span>
       </div>
     </div>

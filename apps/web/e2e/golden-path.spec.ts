@@ -104,6 +104,45 @@ test("supervisor golden path preserves meaningful evidence across every view", a
 test("live mode requires trusted 2 m wind and shows provider configuration errors", async ({
   page,
 }) => {
+  await page.route("**/api/v1/provider-previews/fortyguard", async (route) => {
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          provider: "FORTYGUARD_TEMPERATURE_API_V1",
+          previewType: "LIVE_FORTYGUARD_THERMAL_PREVIEW",
+          activityId: "mock-live-activity",
+          granularityM: 60,
+          submittedStartDate: "2026-08-30",
+          submittedStartTime: "10:00",
+          submittedTimeZone: "America/Phoenix",
+          alignedIntervalStart: "2026-08-30T16:00:00.000Z",
+          alignedIntervalEnd: "2026-08-30T17:00:00.000Z",
+          tiles: [
+            {
+              tileId: "tile-live-1",
+              averageTemperatureC: 35.2,
+              minTemperatureC: 34.8,
+              maxTemperatureC: 35.9,
+              geometry: {
+                type: "Polygon",
+                coordinates: [
+                  [
+                    [-112.01, 32.99],
+                    [-111.99, 32.99],
+                    [-111.99, 33.01],
+                    [-112.01, 33.01],
+                    [-112.01, 32.99],
+                  ],
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    });
+  });
   await page.goto("/mission");
   await page.getByLabel("Scenario").selectOption("live");
   await expect(
@@ -116,6 +155,19 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
   await expect(page.getByLabel("Trusted wind source reference")).toHaveValue(
     "",
   );
+  await page.getByRole("button", { name: "Preview Live FortyGuard" }).click();
+  await expect(page.getByText("Activity mock-live-activity")).toBeVisible();
+  await expect(page.getByText("35.20°C")).toBeVisible();
+  await expect(
+    page
+      .getByText(
+        "WBGT / Safety unavailable until verified exact-2m wind is supplied",
+      )
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("application", { name: "Interactive thermal zone map" }),
+  ).toHaveAttribute("data-ready", "true");
 
   await page.getByRole("button", { name: "Run HeatOps" }).click();
   await expect(page.getByRole("alert")).toContainText(

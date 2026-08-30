@@ -85,6 +85,26 @@ describe("FortyGuard adapter", () => {
     expect(transport).toHaveBeenCalledTimes(3);
   });
 
+  it("returns all validated heatmap tiles for a thermal-only preview", async () => {
+    const client = createFortyGuardClient({
+      apiKey: "secret-test-key",
+      baseUrl: "https://fortyguard.test",
+      transport: fortyGuardTransport([completed]),
+      now: () => new Date("2026-08-28T19:00:00Z"),
+    });
+    const result = await client.preview({
+      polygon,
+      samplePoint: [-112, 33],
+      intervalStartUtc: "2026-08-28T17:00:00Z",
+      intervalEndUtc: "2026-08-28T18:00:00Z",
+      timeZone: "America/Phoenix",
+    });
+    expect(result).toMatchObject({
+      activityId: "verified-activity",
+      tiles: [{ tileId: "tile-60m-1", averageTemperatureC: 34.25 }],
+    });
+  });
+
   it("uses bounded polling and reports timeout", async () => {
     const client = createFortyGuardClient({
       apiKey: "secret-test-key",

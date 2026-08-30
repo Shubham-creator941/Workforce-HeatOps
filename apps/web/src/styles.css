@@ -271,6 +271,31 @@ input {
   color: #aeb8c6;
   font-size: 9px;
 }
+.preview-status {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 14px;
+  margin-bottom: 15px;
+  font-size: 10px;
+}
+.preview-status > div {
+  display: grid;
+}
+.preview-status > div span {
+  color: #b994ff;
+  text-transform: capitalize;
+}
+.preview-status > span {
+  color: var(--muted);
+}
+.preview-status > strong {
+  margin-left: auto;
+  color: var(--amber);
+}
+.preview-status .preview-error {
+  color: #ff8b91;
+}
 .card,
 .stat,
 .evidence-hero,
