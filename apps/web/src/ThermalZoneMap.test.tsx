@@ -75,4 +75,31 @@ describe("ThermalZoneMap states", () => {
       [-111.9665, 33.0345],
     ]);
   });
+
+  it("rejects longitude/latitude outside valid coordinate ranges", () => {
+    const collection: FeatureCollection<Polygon> = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [-112, 33],
+                [181, 33],
+                [-112, 34],
+                [-112, 33],
+              ],
+            ],
+          },
+        },
+      ],
+    };
+
+    expect(() => featureCollectionBounds(collection)).toThrow(
+      "Invalid longitude/latitude in map feature 0.",
+    );
+  });
 });

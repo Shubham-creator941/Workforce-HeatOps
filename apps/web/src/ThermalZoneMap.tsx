@@ -36,12 +36,24 @@ export function featureCollectionBounds(
   let south = Number.POSITIVE_INFINITY;
   let east = Number.NEGATIVE_INFINITY;
   let north = Number.NEGATIVE_INFINITY;
-  for (const feature of collection.features)
+  for (const [featureIndex, feature] of collection.features.entries())
     for (const ring of feature.geometry.coordinates)
       for (const coordinate of ring) {
         const longitude = coordinate[0];
         const latitude = coordinate[1];
-        if (longitude === undefined || latitude === undefined) continue;
+        if (
+          longitude === undefined ||
+          latitude === undefined ||
+          !Number.isFinite(longitude) ||
+          !Number.isFinite(latitude) ||
+          longitude < -180 ||
+          longitude > 180 ||
+          latitude < -90 ||
+          latitude > 90
+        )
+          throw new Error(
+            `Invalid longitude/latitude in map feature ${featureIndex}.`,
+          );
         west = Math.min(west, longitude);
         south = Math.min(south, latitude);
         east = Math.max(east, longitude);
@@ -107,6 +119,8 @@ export function ThermalZoneMap({
   const [basemapError, setBasemapError] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [fittedFeatureCount, setFittedFeatureCount] = useState(0);
+  const [geometryError, setGeometryError] = useState<string>();
+  const [zoneLayersReady, setZoneLayersReady] = useState(false);
   const zones = useMemo<Zone[]>(() => {
     if (preview)
       return preview.tiles.map((tile) => ({
@@ -155,6 +169,8 @@ export function ThermalZoneMap({
     setBasemapError(false);
     setMapReady(false);
     setFittedFeatureCount(0);
+    setGeometryError(undefined);
+    setZoneLayersReady(false);
     const values = zones
       .map((zone) => (preview ? zone.airTemperatureC : zone.estimatedWbgtC))
       .filter((value): value is number => value !== null);
@@ -176,7 +192,17 @@ export function ThermalZoneMap({
         },
       })),
     };
-    const completeBounds = featureCollectionBounds(collection);
+    let completeBounds: [[number, number], [number, number]];
+    try {
+      const bounds = featureCollectionBounds(collection);
+      if (!bounds) throw new Error("No polygon coordinates available.");
+      completeBounds = bounds;
+    } catch (error) {
+      setGeometryError(
+        error instanceof Error ? error.message : "Invalid polygon geometry.",
+      );
+      return;
+    }
     const first = zones[0]?.geometry.coordinates[0]?.[0];
     if (!first) return;
     const map = new maplibregl.Map({
@@ -199,44 +225,59 @@ export function ThermalZoneMap({
     const resizeObserver = new ResizeObserver(() => map.resize());
     resizeObserver.observe(containerRef.current);
     let fitFrame = 0;
-    let styleLoaded = false;
+    let remoteStyleReady = false;
     let usingFallback = false;
     const activateFallback = () => {
-      if (styleLoaded || usingFallback) return;
+      if (remoteStyleReady || usingFallback) return;
       usingFallback = true;
       setBasemapError(true);
       map.setStyle(FALLBACK_STYLE);
     };
-    const styleTimeout = window.setTimeout(activateFallback, 2_500);
+    const styleTimeout = window.setTimeout(activateFallback, 10_000);
     map.on("error", () => {
-      setBasemapError(true);
-      activateFallback();
+      if (!remoteStyleReady) activateFallback();
     });
-    map.on("load", () => {
-      window.clearTimeout(styleTimeout);
-      styleLoaded = true;
-      map.addSource("zones", { type: "geojson", data: collection });
-      map.addLayer({
-        id: "zones-fill",
-        type: "fill",
-        source: "zones",
-        paint: {
-          "fill-color": ["get", "fillColor"],
-          "fill-opacity": 0.66,
-          "fill-outline-color": [
-            "case",
-            ["==", ["get", "zoneId"], selectedRef.current ?? ""],
-            "#ffffff",
-            "#ffbd5c",
-          ],
-        },
-      });
-      map.addLayer({
-        id: "zones-line",
-        type: "line",
-        source: "zones",
-        paint: { "line-color": "#ffffff", "line-width": 1.5 },
-      });
+    map.on("style.load", () => {
+      if (!usingFallback) {
+        remoteStyleReady = true;
+        window.clearTimeout(styleTimeout);
+      }
+      if (!map.getSource("zones"))
+        map.addSource("zones", { type: "geojson", data: collection });
+      if (!map.getLayer("zones-fill"))
+        map.addLayer({
+          id: "zones-fill",
+          type: "fill",
+          source: "zones",
+          paint: {
+            "fill-color": ["get", "fillColor"],
+            "fill-opacity": usingFallback ? 0.82 : 0.66,
+            "fill-outline-color": [
+              "case",
+              ["==", ["get", "zoneId"], selectedRef.current ?? ""],
+              "#ffffff",
+              "#ffbd5c",
+            ],
+          },
+        });
+      if (!map.getLayer("zones-line"))
+        map.addLayer({
+          id: "zones-line",
+          type: "line",
+          source: "zones",
+          paint: {
+            "line-color": usingFallback ? "#ffe2a8" : "#ffffff",
+            "line-width": usingFallback ? 2.25 : 1.5,
+          },
+        });
+      setZoneLayersReady(
+        Boolean(
+          map.getSource("zones") &&
+          map.getLayer("zones-fill") &&
+          map.getLayer("zones-line"),
+        ),
+      );
+      window.cancelAnimationFrame(fitFrame);
       fitFrame = window.requestAnimationFrame(() => {
         map.resize();
         if (completeBounds)
@@ -292,6 +333,12 @@ export function ThermalZoneMap({
         No verified zone geometry is available for this result.
       </div>
     );
+  if (geometryError)
+    return (
+      <div className="map-state error" role="status">
+        Invalid verified zone geometry: {geometryError}
+      </div>
+    );
   return (
     <div className="thermal-map interactive-map">
       <div className="zone-selectors" aria-label="Map zones">
@@ -317,6 +364,10 @@ export function ThermalZoneMap({
           data-ready={mapReady}
           data-feature-count={zones.length}
           data-fit-feature-count={fittedFeatureCount}
+          data-zone-source-ready={zoneLayersReady}
+          data-zone-fill-ready={zoneLayersReady}
+          data-zone-line-ready={zoneLayersReady}
+          data-basemap-mode={basemapError ? "fallback" : "remote"}
         />
         {basemapError && (
           <div className="basemap-warning" role="status">

@@ -105,6 +105,9 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
 }) => {
   const mapRequests: string[] = [];
   page.on("request", (request) => mapRequests.push(request.url()));
+  await page.route("https://tiles.openfreemap.org/**", (route) =>
+    route.abort(),
+  );
   const previewTiles = Array.from({ length: 1_174 }, (_, index) => {
     const x = -112.01 + (index % 34) * 0.0005;
     const y = 32.99 + Math.floor(index / 34) * 0.0005;
@@ -176,6 +179,15 @@ test("live mode requires trusted 2 m wind and shows provider configuration error
   await expect(map).toHaveAttribute("data-ready", "true");
   await expect(map).toHaveAttribute("data-feature-count", "1174");
   await expect(map).toHaveAttribute("data-fit-feature-count", "1174");
+  await expect(map).toHaveAttribute("data-zone-source-ready", "true");
+  await expect(map).toHaveAttribute("data-zone-fill-ready", "true");
+  await expect(map).toHaveAttribute("data-zone-line-ready", "true");
+  await expect(map).toHaveAttribute("data-basemap-mode", "fallback");
+  await expect(
+    page.getByText(
+      "Basemap unavailable. Verified zone geometry and evidence remain active.",
+    ),
+  ).toBeVisible();
   const toolbarBox = await page.getByLabel("Map zones").boundingBox();
   const viewportBox = await page.locator(".map-viewport").boundingBox();
   expect(toolbarBox).not.toBeNull();
