@@ -24,9 +24,9 @@ export function createApp(
   app.disable("x-powered-by");
   app.use(helmet());
   app.use(cors({ origin: config.CORS_ORIGIN, credentials: false }));
-  app.use(express.json({ limit: "1mb" }));
   app.use(correlationId);
   app.use(pinoHttp({ logger: pino({ level: config.LOG_LEVEL }) }));
+  app.use(express.json({ limit: "1mb" }));
   app.use("/api/v1/health", healthRouter(database, decisionEngine));
   if (planning)
     app.use("/api/v1/planning-runs", planningRouter(planning, explainer));

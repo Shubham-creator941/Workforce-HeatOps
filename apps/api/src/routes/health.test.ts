@@ -30,6 +30,18 @@ const ResponseSchema = z.object({
 });
 
 describe("GET /api/v1/health", () => {
+  it("reports process liveness without requiring dependencies", async () => {
+    const engine: DecisionEngineHealth = {
+      check: () => Promise.resolve("unavailable"),
+    };
+    const response = await request(createApp(config, database, engine))
+      .get("/api/v1/health/live")
+      .expect(200);
+    expect(response.body).toMatchObject({
+      data: { service: "workforce-heatops-api", status: "ok" },
+    });
+  });
+
   it("reports healthy real dependency states", async () => {
     const engine: DecisionEngineHealth = { check: () => Promise.resolve("ok") };
     const response = await request(createApp(config, database, engine))

@@ -7,6 +7,12 @@ export function healthRouter(
   decisionEngine: DecisionEngineHealth,
 ): Router {
   const router = Router();
+  router.get("/live", (request, response) => {
+    response.json({
+      data: { service: "workforce-heatops-api", status: "ok" },
+      meta: { correlationId: request.correlationId },
+    });
+  });
   router.get("/", async (request, response, next) => {
     try {
       const [databaseState, decisionEngineState] = await Promise.all([

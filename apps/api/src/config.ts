@@ -55,5 +55,14 @@ export type Config = Omit<LoadedConfig, ProviderConfigKey> &
 export function loadConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): LoadedConfig {
-  return ConfigSchema.parse(environment);
+  const nodeEnvironment = environment.NODE_ENV ?? "development";
+  return ConfigSchema.parse({
+    ...environment,
+    ...(nodeEnvironment === "development" && !environment.DATABASE_URL
+      ? {
+          DATABASE_URL:
+            "mysql://heatops:heatops_local@localhost:3306/workforce_heatops",
+        }
+      : {}),
+  });
 }

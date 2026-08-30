@@ -11,7 +11,7 @@ export const errorHandler: ErrorRequestHandler = (
   void _next;
   const validation = error instanceof ZodError;
   const persistence = error instanceof PlanningPersistenceError;
-  request.log.error(
+  request.log?.error(
     { err: error, correlationId: request.correlationId },
     "request failed",
   );

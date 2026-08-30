@@ -12,8 +12,8 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command: "pnpm --filter @heatops/api exec tsx ../web/e2e/demo-api.ts",
-      url: "http://127.0.0.1:3100/api/v1/health",
+      command: "pnpm --filter @heatops/api exec tsx ../web/e2e/real-api.ts",
+      url: "http://127.0.0.1:3100/api/v1/health/live",
       reuseExistingServer: !process.env.CI,
     },
     {
